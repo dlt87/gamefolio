@@ -314,7 +314,7 @@ export default function PortfolioGame() {
       }
 
       // stamina drain/regen
-      const drain = 0.6;   // per second
+      const drain = 0;   // per second
       const regen = 0.35;  // per second
       let s = stamina;
       if (sprinting && (ix || iy)) s = Math.max(0, s - drain * dt);
