@@ -606,10 +606,11 @@ export default function PortfolioGame() {
       }
 
       raf = requestAnimationFrame(step);
-      document.addEventListener("visibilitychange", onVis);
     };
 
+    document.addEventListener("visibilitychange", onVis);
     raf = requestAnimationFrame(step);
+    
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVis);
