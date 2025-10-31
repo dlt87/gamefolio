@@ -7,6 +7,11 @@ const PLAYER = { speed: 220, size: 28 };
 const ASPECT = 16 / 9;
 const PADDING = 48; // min breathing room around the window
 
+const NAV_H = 56;        // height of your fixed header (px)
+const FOOTER_H = 28;     // bottom breathing room
+const EXTRA_GAP = 12;    // extra safety gap
+const MAX_VIEW = { width: 960, height: 540 }; // <= make the game box smaller (16:9)
+
 // Tiles
 const TILE = 40;                          // tile size in px (fits your world nicely)
 const COLS = WORLD.width / TILE;          // 2000/40 = 50
@@ -17,6 +22,17 @@ const ZONES = [
   { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
   { id: "music", label: "Music / Audio", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "Audio demos..." },
   { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
+];
+
+// Build a direct (streamable) URL from a Google Drive file ID
+const driveDl = (id: string) => `https://docs.google.com/uc?export=download&id=${id}`;
+
+// List your audio snippets here (title + Drive file ID)
+const AUDIO_SNIPPETS: { title: string; id: string }[] = [
+  { title: "DNA - BTS remake", id: "1eKdES58tGEVlESbv4kNjRuUQtzu01nLH" }, // <- your example wav
+  // Add more like:
+  // { title: "Vocal take 02 (raw)", id: "<FILE_ID>" },
+  // { title: "Pitch-shift demo +4", id: "<FILE_ID>" },
 ];
 
 // --- TILEMAP ---
@@ -64,28 +80,35 @@ for (let r = yTop; r <= yBot; r++) {
 // Freeze map
 const MAP_ROWS: string[] = MAP_ROWS_BASE;
 
-const MINIMAP = { w: 180, h: 108, padding: 12 }; // 16:9 mini
+// const MINIMAP = { w: 180, h: 108, padding: 12 }; // 16:9 mini
 
 function computeViewport() {
-  // available space inside the page (leave some padding)
+  // available space inside the page (leave some padding + account for fixed header/footer)
   const ww = Math.max(320, window.innerWidth - PADDING * 2);
-  const wh = Math.max(240, window.innerHeight - PADDING * 2);
+  const wh = Math.max(
+    240,
+    window.innerHeight - PADDING * 2 - NAV_H - FOOTER_H - EXTRA_GAP
+  );
 
-  // cap by world size
+  // cap by world size first
   let w = Math.min(ww, WORLD.width);
   let h = Math.min(wh, WORLD.height);
 
   // enforce 16:9 inside the available box
   const boxAspect = w / h;
   if (boxAspect > ASPECT) {
-    // too wide → reduce width
     w = Math.floor(h * ASPECT);
   } else {
-    // too tall → reduce height
     h = Math.floor(w / ASPECT);
   }
+
+  // final clamp so the canvas stays smaller than the navbar/bottom edges
+  w = Math.min(w, MAX_VIEW.width);
+  h = Math.min(h, MAX_VIEW.height);
+
   return { width: w, height: h };
 }
+
 
 function intersects(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -474,45 +497,45 @@ export default function PortfolioGame() {
 
         ctx.restore();
 
-        // === Minimap (screen space) ===
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // draw in screen coords
-        const mmX = MINIMAP.padding;
-        const mmY = MINIMAP.padding + 40; // below top bar
-        const sx = MINIMAP.w / WORLD.width;
-        const sy = MINIMAP.h / WORLD.height;
+        // // === OLD STATIC Minimap (screen space) ===
+        // ctx.save();
+        // ctx.setTransform(1, 0, 0, 1, 0, 0); // draw in screen coords
+        // const mmX = MINIMAP.padding;
+        // const mmY = MINIMAP.padding + 40; // below top bar
+        // const sx = MINIMAP.w / WORLD.width;
+        // const sy = MINIMAP.h / WORLD.height;
 
-        // bg
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
-        ctx.fillRect(mmX - 6, mmY - 6, MINIMAP.w + 12, MINIMAP.h + 12);
-        ctx.fillStyle = "rgba(30,41,59,0.9)"; // slate
-        ctx.fillRect(mmX, mmY, MINIMAP.w, MINIMAP.h);
+        // // bg
+        // ctx.fillStyle = "rgba(0,0,0,0.4)";
+        // ctx.fillRect(mmX - 6, mmY - 6, MINIMAP.w + 12, MINIMAP.h + 12);
+        // ctx.fillStyle = "rgba(30,41,59,0.9)"; // slate
+        // ctx.fillRect(mmX, mmY, MINIMAP.w, MINIMAP.h);
 
-        // tiles
-        ctx.fillStyle = "rgba(148,163,184,0.9)";
-        for (let ty = 0; ty < ROWS; ty++) {
-          const row = MAP_ROWS[ty];
-          for (let tx = 0; tx < COLS; tx++) {
-            if (row.charCodeAt(tx) === 35) {
-              ctx.fillRect(mmX + tx * TILE * sx, mmY + ty * TILE * sy, Math.max(1, TILE * sx), Math.max(1, TILE * sy));
-            }
-          }
-        }
+        // // tiles
+        // ctx.fillStyle = "rgba(148,163,184,0.9)";
+        // for (let ty = 0; ty < ROWS; ty++) {
+        //   const row = MAP_ROWS[ty];
+        //   for (let tx = 0; tx < COLS; tx++) {
+        //     if (row.charCodeAt(tx) === 35) {
+        //       ctx.fillRect(mmX + tx * TILE * sx, mmY + ty * TILE * sy, Math.max(1, TILE * sx), Math.max(1, TILE * sy));
+        //     }
+        //   }
+        // }
 
-        // zones
-        for (const z of ZONES) {
-          const { x, y, w, h } = z.rect;
-          ctx.fillStyle = z.color + "CC"; // add alpha
-          ctx.fillRect(mmX + x * sx, mmY + y * sy, Math.max(2, w * sx), Math.max(2, h * sy));
-        }
+        // // zones
+        // for (const z of ZONES) {
+        //   const { x, y, w, h } = z.rect;
+        //   ctx.fillStyle = z.color + "CC"; // add alpha
+        //   ctx.fillRect(mmX + x * sx, mmY + y * sy, Math.max(2, w * sx), Math.max(2, h * sy));
+        // }
 
-        // player dot
-        ctx.fillStyle = "#A78BFA";
-        ctx.beginPath();
-        ctx.arc(mmX + (player.x + player.w / 2) * sx, mmY + (player.y + player.h / 2) * sy, 3, 0, Math.PI * 2);
-        ctx.fill();
+        // // player dot
+        // ctx.fillStyle = "#A78BFA";
+        // ctx.beginPath();
+        // ctx.arc(mmX + (player.x + player.w / 2) * sx, mmY + (player.y + player.h / 2) * sy, 3, 0, Math.PI * 2);
+        // ctx.fill();
 
-        ctx.restore();
+        // ctx.restore();
 
         // Joystick UI (screen space)
         if (touchRef.current.id !== null) {
@@ -546,7 +569,7 @@ export default function PortfolioGame() {
         // HUD
         ctx.fillStyle = "rgba(255,255,255,0.9)";
         ctx.font = "14px Inter, system-ui, sans-serif";
-        ctx.fillText("Move with WASD / Arrow Keys. Walk into a colored zone to open it.", 16, 24);
+        ctx.fillText("Move with WASD. Walk into a colored zone to open it.", 16, 24);
 
         // Minimap (toggle with 'M')
         if (showMinimap) {
@@ -610,7 +633,7 @@ export default function PortfolioGame() {
 
     document.addEventListener("visibilitychange", onVis);
     raf = requestAnimationFrame(step);
-    
+
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVis);
@@ -774,6 +797,141 @@ export default function PortfolioGame() {
                   </div>
                 </div>
               )}
+
+              {zoneData.id === "projects" && (
+                <div className="mt-3 grid md:grid-cols-[160px,1fr] gap-6 items-start">
+                  <div className="space-y-3">
+                    <p>
+                      Uhm... this is awkward. You found the projects section, but I haven’t added any projects yet!
+                      Feel free to check back later, or reach out via email or LinkedIn to see what I’m working on.
+                    </p>
+
+                    <ul className="list-disc list-inside opacity-90">
+                      <li>Current: interactive portfolio game (this site!)</li>
+                      <li>Ongoing: Melodyne-style plugin for Ableton</li>
+                      <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
+                    </ul>
+
+                    <div className="flex flex-wrap gap-3 pt-1">
+                      <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
+                      <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
+                      <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {zoneData.id === "music" && (
+                <div className="mt-6 space-y-4">
+                  <p className="opacity-90">
+                    Since I was a kid, I’ve loved making music. In my free time I love to
+                    produce with friends using Ableton Live. I’m fascinated by audio tech and
+                    signal processing, which is why I’m building a pitch-correction plugin as a side project.
+                  </p>
+
+                  {/* Responsive YouTube playlist embed */}
+                  <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
+                    <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
+                      <iframe
+                        src="https://www.youtube-nocookie.com/embed/videoseries?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB"
+                        title="David Ting — YouTube Playlist"
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          border: 0,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fallback link */}
+                  <a
+                    className="underline opacity-80 hover:opacity-100"
+                    href="https://www.youtube.com/playlist?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB&index=2"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open playlist on YouTube
+                  </a>
+
+                  <p className="opacity-90">
+                    Below are some demos of my own music productions:
+                  </p>
+
+                  {/* Google Drive video embed */}
+                  <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
+                    <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
+                      <iframe
+                        src="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/preview"
+                        title="Music demo — Google Drive"
+                        loading="lazy"
+                        allow="autoplay"
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          border: 0,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fallback link */}
+                  <a
+                    className="underline opacity-80 hover:opacity-100"
+                    href="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/view?usp=sharing"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open video on Google Drive
+                  </a>
+                </div>
+              )}
+
+              {/* Audio snippet list */}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
+
+                <ul className="space-y-3">
+                  {AUDIO_SNIPPETS.map((a) => (
+                    <li
+                      key={a.id}
+                      className="rounded-xl ring-1 ring-white/10 bg-white/5 p-4 flex flex-col gap-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{a.title}</span>
+                        <a
+                          className="text-sm underline opacity-80 hover:opacity-100"
+                          href={driveDl(a.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          download
+                        >
+                          Download
+                        </a>
+                      </div>
+
+                      <audio
+                        controls
+                        preload="none"
+                        className="w-full"
+                        src={driveDl(a.id)}
+                      >
+                        Your browser does not support the audio element.
+                      </audio>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+
             </div>
           </div>
         </div>
@@ -781,7 +939,7 @@ export default function PortfolioGame() {
 
       {/* Helper chip */}
       <div className="fixed left-4 bottom-4 z-20 rounded-full bg-black/60 backdrop-blur px-4 py-2 text-sm ring-1 ring-white/10">
-        Move with WASD • Enter to open zones
+        Move with WASD • Shift to sprint • M toggles minimap
       </div>
 
       <footer className="pointer-events-auto absolute bottom-2 right-3 z-10 text-xs opacity-60">
