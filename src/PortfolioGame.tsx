@@ -91,6 +91,9 @@ function intersects(a: { x: number; y: number; w: number; h: number }, b: { x: n
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+// === Helpers & refs ===
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
 // Tile helpers
 const isSolid = (tx: number, ty: number) =>
   ty >= 0 && ty < ROWS && tx >= 0 && tx < COLS && MAP_ROWS[ty].charCodeAt(tx) === 35; // '#'
@@ -163,6 +166,12 @@ export default function PortfolioGame() {
   const [player, setPlayer] = useState({ x: 500, y: 500, w: PLAYER.size, h: PLAYER.size });
   const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 0.75 });
   const [activeZone, setActiveZone] = useState<string | null>(null);
+
+  // Which zone (if any) the player is overlapping this frame:
+  const overlapRef = useRef<string | null>(null);
+  // Minimap toggle
+  const [showMinimap, setShowMinimap] = useState(true);
+
   // Touch joystick state
   const touchRef = useRef<{ id: number | null, startX: number, startY: number, dx: number, dy: number }>({ id: null, startX: 0, startY: 0, dx: 0, dy: 0 });
   const [stamina, setStamina] = useState(1); // 0..1
@@ -236,7 +245,16 @@ export default function PortfolioGame() {
         e.preventDefault();
         setKeys(prev => ({ ...prev, [k]: true }));
       }
-      if (k === "escape") closeZone();
+      if (k === "escape") {
+        setActiveZone(null);
+      }
+      if (k === "enter") {
+        const id = overlapRef.current;
+        if (id) setActiveZone(id);
+      }
+      if (k === "m") {
+        setShowMinimap((v) => !v);
+      }
       if (k === "-" || k === "_" || k === "[") {
         e.preventDefault();
         setCamera((c) => ({ ...c, zoom: Math.max(0.5, +(c.zoom - 0.05).toFixed(2)) })); // zoom out
@@ -330,35 +348,30 @@ export default function PortfolioGame() {
       next.x = Math.max(0, Math.min(WORLD.width - next.w, next.x));
       next.y = Math.max(0, Math.min(WORLD.height - next.h, next.y));
 
-      // // Camera follows with soft bounds based on current viewport
-      // const cam = { ...camera };
-      // const marginX = viewport.width  * 0.3;
-      // const marginY = viewport.height * 0.3;
-      // const targetX = next.x + next.w / 2;
-      // const targetY = next.y + next.h / 2;
+      // const vW = viewport.width / camera.zoom;
+      // const vH = viewport.height / camera.zoom;
 
-      // if (targetX - cam.x < marginX) cam.x = Math.max(0, targetX - marginX);
-      // if (targetX - cam.x > viewport.width - marginX)
-      //   cam.x = Math.min(WORLD.width - viewport.width, targetX - (viewport.width - marginX));
-      // if (targetY - cam.y < marginY) cam.y = Math.max(0, targetY - marginY);
-      // if (targetY - cam.y > viewport.height - marginY)
-      //   cam.y = Math.min(WORLD.height - viewport.height, targetY - (viewport.height - marginY));
-      const vW = viewport.width / camera.zoom;
-      const vH = viewport.height / camera.zoom;
-
-      // Camera follows with soft bounds
-      const cam = { ...camera };
-      const marginX = vW * 0.3;
-      const marginY = vH * 0.3;
+      // Camera target = keep player slightly off-center (soft bounds) + smooth lerp
+      const marginX = viewport.width * 0.3;
+      const marginY = viewport.height * 0.3;
       const targetX = next.x + next.w / 2;
       const targetY = next.y + next.h / 2;
 
-      if (targetX - cam.x < marginX) cam.x = Math.max(0, targetX - marginX);
-      if (targetX - cam.x > vW - marginX)
-        cam.x = Math.min(WORLD.width - vW, targetX - (vW - marginX));
-      if (targetY - cam.y < marginY) cam.y = Math.max(0, targetY - marginY);
-      if (targetY - cam.y > vH - marginY)
-        cam.y = Math.min(WORLD.height - vH, targetY - (vH - marginY));
+      let desiredX = camera.x;
+      let desiredY = camera.y;
+
+      if (targetX - camera.x < marginX) desiredX = Math.max(0, targetX - marginX);
+      if (targetX - camera.x > viewport.width - marginX)
+        desiredX = Math.min(WORLD.width - viewport.width, targetX - (viewport.width - marginX));
+      if (targetY - camera.y < marginY) desiredY = Math.max(0, targetY - marginY);
+      if (targetY - camera.y > viewport.height - marginY)
+        desiredY = Math.min(WORLD.height - viewport.height, targetY - (viewport.height - marginY));
+
+      // Smoothly approach desired position
+      const cam = {
+        x: lerp(camera.x, desiredX, 0.12),
+        y: lerp(camera.y, desiredY, 0.12),
+      };
 
       // Save lightweight state
       try {
@@ -436,6 +449,19 @@ export default function PortfolioGame() {
         ctx.arc(next.x + next.w / 2 + 6, next.y + next.h / 2 - 4, 3, 0, Math.PI * 2);
         ctx.fill();
 
+        // Zone prompt if overlapping
+        const inZone = ZONES.find((z) => intersects(next, { ...z.rect }));
+        if (inZone) {
+          const { x, y, w } = inZone.rect;
+          ctx.fillStyle = "rgba(0,0,0,0.6)";
+          ctx.fillRect(x + w / 2 - 70, y - 36, 140, 26);
+          ctx.strokeStyle = "rgba(255,255,255,0.25)";
+          ctx.strokeRect(x + w / 2 - 70, y - 36, 140, 26);
+          ctx.fillStyle = "white";
+          ctx.font = "12px Inter, system-ui, sans-serif";
+          ctx.fillText("Press Enter to open", x + w / 2 - 54, y - 18);
+        }
+
         ctx.restore();
 
         // === Minimap (screen space) ===
@@ -478,7 +504,6 @@ export default function PortfolioGame() {
 
         ctx.restore();
 
-
         // Joystick UI (screen space)
         if (touchRef.current.id !== null) {
           const r = 34;
@@ -508,11 +533,35 @@ export default function PortfolioGame() {
           ctx.restore();
         }
 
-
         // HUD
         ctx.fillStyle = "rgba(255,255,255,0.9)";
         ctx.font = "14px Inter, system-ui, sans-serif";
         ctx.fillText("Move with WASD / Arrow Keys. Walk into a colored zone to open it.", 16, 24);
+
+        // Minimap (toggle with 'M')
+        if (showMinimap) {
+          const mmW = 180, mmH = 108, pad = 12;
+          const mmX = pad, mmY = pad + 28;
+          const sx = mmW / WORLD.width;
+          const sy = mmH / WORLD.height;
+
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(mmX - 6, mmY - 6, mmW + 12, mmH + 12);
+          ctx.fillStyle = "rgba(30,41,59,0.9)";
+          ctx.fillRect(mmX, mmY, mmW, mmH);
+
+          // Zones
+          for (const z of ZONES) {
+            const { x, y, w, h } = z.rect;
+            ctx.fillStyle = z.color + "CC";
+            ctx.fillRect(mmX + x * sx, mmY + y * sy, Math.max(2, w * sx), Math.max(2, h * sy));
+          }
+          // Player
+          ctx.fillStyle = "#A78BFA";
+          ctx.beginPath();
+          ctx.arc(mmX + (next.x + next.w / 2) * sx, mmY + (next.y + next.h / 2) * sy, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         // === Stamina ring (screen space) ===
         ctx.save();
@@ -538,15 +587,31 @@ export default function PortfolioGame() {
 
       // Zone enter (edge trigger)
       const pBox = player;
-      const nowIn = ZONES.find(z => intersects({ ...next }, { ...z.rect }));
-      const wasIn = ZONES.find(z => intersects({ ...pBox }, { ...z.rect }));
-      if (nowIn && !wasIn) setActiveZone(nowIn.id);
+      const nowIn = ZONES.find((z) => intersects({ ...next }, { ...z.rect }));
+      const wasIn = ZONES.find((z) => intersects({ ...pBox }, { ...z.rect }));
+      overlapRef.current = nowIn ? nowIn.id : null; // <-- keep latest overlap for Enter key
+
+      if (nowIn && !wasIn) {
+        setActiveZone(nowIn.id);
+      }
 
       raf = requestAnimationFrame(step);
+      const onVis = () => {
+        if (document.hidden) {
+          cancelAnimationFrame(raf);
+        } else {
+          last = performance.now();
+          raf = requestAnimationFrame(step);
+        }
+      };
+      document.addEventListener("visibilitychange", onVis);
     };
 
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [player, camera, keys]);
 
 
@@ -630,7 +695,7 @@ export default function PortfolioGame() {
         <div className="w-full backdrop-blur-md bg-white/5 border-b border-white/10">
           {/* Centered content inside */}
           <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
-            <a href="/" className="text-lg font-semibold tracking-tight">yourdomain.dev</a>
+            <a href="/" className="text-lg font-semibold tracking-tight">davidting.dev</a>
             <nav className="hidden md:flex gap-6 text-sm">
               {ZONES.map((z) => (
                 <a
@@ -649,9 +714,13 @@ export default function PortfolioGame() {
       {/* <div className="pointer-events-none absolute left-4 top-16 z-10 text-sm opacity-80">
         Press <span className="font-semibold">Esc</span> to close a panel.
       </div> */}
+      <div className="mt-4 text-sm opacity-80">
+        Press <span className="font-semibold">Esc</span> to close a panel • Press <span className="font-semibold">M</span> to toggle minimap.
+      </div>
+
 
       {zoneData && (
-        <div role="dialog" aria-modal="true"
+        <div role="dialog" aria-modal="true" aria-labelledby="zone-title"
           className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden"
           onClick={() => closeZone()}>
           <div
@@ -706,6 +775,11 @@ export default function PortfolioGame() {
           </div>
         </div>
       )}
+
+      {/* Helper chip */}
+      <div className="fixed left-4 bottom-4 z-20 rounded-full bg-black/60 backdrop-blur px-4 py-2 text-sm ring-1 ring-white/10">
+        Move with WASD • Enter to open zones
+      </div>
 
       <footer className="pointer-events-auto absolute bottom-2 right-3 z-10 text-xs opacity-60">
         © {new Date().getFullYear()} dting.dev — Built as a tiny game.
