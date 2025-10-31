@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Full-viewport baseline */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+/* Optional: dark bg to match the game */
+:root { color-scheme: dark; }
+
+/* REMOVE all the Vite template styles:
+   - body { display:flex; place-items:center; min-width; min-height }
+   - a/button/h1 defaults, media queries, etc.
+   They cause centering and side gaps at certain zoom levels. */
