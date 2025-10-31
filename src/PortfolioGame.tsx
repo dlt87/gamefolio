@@ -13,10 +13,10 @@ const COLS = WORLD.width / TILE;          // 2000/40 = 50
 const ROWS = WORLD.height / TILE;         // 1200/40 = 30
 
 const ZONES = [
-  { id: "about",   label: "About Me",      color: "#6EE7B7", rect: { x: 180,  y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps."},
-  { id: "projects",label: "Projects",      color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
-  { id: "music",   label: "Music / Audio", color: "#FDE68A", rect: { x: 180,  y: 800, w: 300, h: 200 }, blurb: "Audio demos..." },
-  { id: "contact", label: "Contact",       color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
+  { id: "about", label: "About Me", color: "#6EE7B7", rect: { x: 180, y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps." },
+  { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
+  { id: "music", label: "Music / Audio", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "Audio demos..." },
+  { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
 ];
 
 // --- TILEMAP ---
@@ -68,7 +68,7 @@ const MINIMAP = { w: 180, h: 108, padding: 12 }; // 16:9 mini
 
 function computeViewport() {
   // available space inside the page (leave some padding)
-  const ww = Math.max(320, window.innerWidth  - PADDING * 2);
+  const ww = Math.max(320, window.innerWidth - PADDING * 2);
   const wh = Math.max(240, window.innerHeight - PADDING * 2);
 
   // cap by world size
@@ -87,7 +87,7 @@ function computeViewport() {
   return { width: w, height: h };
 }
 
-function intersects(a: {x:number;y:number;w:number;h:number}, b:{x:number;y:number;w:number;h:number}) {
+function intersects(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
@@ -164,12 +164,12 @@ export default function PortfolioGame() {
   const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 0.75 });
   const [activeZone, setActiveZone] = useState<string | null>(null);
   // Touch joystick state
-  const touchRef = useRef<{id:number|null, startX:number, startY:number, dx:number, dy:number}>({id:null,startX:0,startY:0,dx:0,dy:0});
+  const touchRef = useRef<{ id: number | null, startX: number, startY: number, dx: number, dy: number }>({ id: null, startX: 0, startY: 0, dx: 0, dy: 0 });
   const [stamina, setStamina] = useState(1); // 0..1
 
   // Viewport state
   const [viewport, setViewport] = useState(
-  typeof window !== "undefined" ? computeViewport() : { width: 1024, height: 576 }
+    typeof window !== "undefined" ? computeViewport() : { width: 1024, height: 576 }
   );
 
   useEffect(() => {
@@ -225,14 +225,14 @@ export default function PortfolioGame() {
           setActiveZone(save.activeZone);
         }
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // Keyboard
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (["w","a","s","d","arrowup","arrowleft","arrowdown","arrowright","shift"].includes(k)) {
+      if (["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright", "shift"].includes(k)) {
         e.preventDefault();
         setKeys(prev => ({ ...prev, [k]: true }));
       }
@@ -275,9 +275,9 @@ export default function PortfolioGame() {
 
       let ix = 0, iy = 0;
       // keyboard
-      if (keys["w"] || keys["arrowup"])    iy -= 1;
-      if (keys["s"] || keys["arrowdown"])  iy += 1;
-      if (keys["a"] || keys["arrowleft"])  ix -= 1;
+      if (keys["w"] || keys["arrowup"]) iy -= 1;
+      if (keys["s"] || keys["arrowdown"]) iy += 1;
+      if (keys["a"] || keys["arrowleft"]) ix -= 1;
       if (keys["d"] || keys["arrowright"]) ix += 1;
 
       // touch joystick
@@ -318,7 +318,7 @@ export default function PortfolioGame() {
       const regen = 0.35;  // per second
       let s = stamina;
       if (sprinting && (ix || iy)) s = Math.max(0, s - drain * dt);
-      else                          s = Math.min(1, s + regen * dt);
+      else s = Math.min(1, s + regen * dt);
       if (s !== stamina) setStamina(s);
 
       let next = { ...player };
@@ -327,7 +327,7 @@ export default function PortfolioGame() {
       moveAndCollide(next, vx, vy, dt);
 
       // Clamp to world
-      next.x = Math.max(0, Math.min(WORLD.width  - next.w, next.x));
+      next.x = Math.max(0, Math.min(WORLD.width - next.w, next.x));
       next.y = Math.max(0, Math.min(WORLD.height - next.h, next.y));
 
       // // Camera follows with soft bounds based on current viewport
@@ -343,7 +343,7 @@ export default function PortfolioGame() {
       // if (targetY - cam.y < marginY) cam.y = Math.max(0, targetY - marginY);
       // if (targetY - cam.y > viewport.height - marginY)
       //   cam.y = Math.min(WORLD.height - viewport.height, targetY - (viewport.height - marginY));
-      const vW = viewport.width  / camera.zoom;
+      const vW = viewport.width / camera.zoom;
       const vH = viewport.height / camera.zoom;
 
       // Camera follows with soft bounds
@@ -366,7 +366,7 @@ export default function PortfolioGame() {
           player: { x: next.x, y: next.y },
           activeZone
         }));
-      } catch {}
+      } catch { }
 
       setPlayer(next);
       setCamera(cam);
@@ -384,12 +384,12 @@ export default function PortfolioGame() {
         ctx.translate(-cam.x, -cam.y);         // then move the camera
 
         // Compute visible tile range from camera & viewport (ZOOM-AWARE + PADDING)
-        const vW = viewport.width  / camera.zoom;  // world-space view width
+        const vW = viewport.width / camera.zoom;  // world-space view width
         const vH = viewport.height / camera.zoom;  // world-space view height
         const PAD = 2 * TILE;                      // overdraw to prevent gaps
 
-        const tx0 = Math.max(0, Math.floor((camera.x - PAD)       / TILE));
-        const ty0 = Math.max(0, Math.floor((camera.y - PAD)       / TILE));
+        const tx0 = Math.max(0, Math.floor((camera.x - PAD) / TILE));
+        const ty0 = Math.max(0, Math.floor((camera.y - PAD) / TILE));
         const tx1 = Math.min(COLS - 1, Math.floor((camera.x + vW + PAD) / TILE));
         const ty1 = Math.min(ROWS - 1, Math.floor((camera.y + vH + PAD) / TILE));
 
@@ -440,7 +440,7 @@ export default function PortfolioGame() {
 
         // === Minimap (screen space) ===
         ctx.save();
-        ctx.setTransform(1,0,0,1,0,0); // draw in screen coords
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // draw in screen coords
         const mmX = MINIMAP.padding;
         const mmY = MINIMAP.padding + 40; // below top bar
         const sx = MINIMAP.w / WORLD.width;
@@ -473,7 +473,7 @@ export default function PortfolioGame() {
         // player dot
         ctx.fillStyle = "#A78BFA";
         ctx.beginPath();
-        ctx.arc(mmX + (player.x + player.w/2) * sx, mmY + (player.y + player.h/2) * sy, 3, 0, Math.PI*2);
+        ctx.arc(mmX + (player.x + player.w / 2) * sx, mmY + (player.y + player.h / 2) * sy, 3, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
@@ -516,7 +516,7 @@ export default function PortfolioGame() {
 
         // === Stamina ring (screen space) ===
         ctx.save();
-        ctx.setTransform(1,0,0,1,0,0);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         // const cx = 24;
         const cy = viewport.height - 24;
@@ -525,12 +525,12 @@ export default function PortfolioGame() {
         ctx.globalAlpha = 0.9;
         ctx.strokeStyle = "rgba(255,255,255,0.25)";
         ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(24, cy, r, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(24, cy, r, 0, Math.PI * 2); ctx.stroke();
 
         // arc for current stamina
         ctx.strokeStyle = "#A78BFA";
         ctx.beginPath();
-        ctx.arc(24, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*stamina);
+        ctx.arc(24, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * stamina);
         ctx.stroke();
 
         ctx.restore();
@@ -568,20 +568,32 @@ export default function PortfolioGame() {
   return (
     <div className="relative w-full h-screen bg-slate-900 text-white">
       {/* Fullscreen canvas layer */}
+      {/* Floating game window (centered, with neon glow + glass) */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-10">
+        {/* Glow layer */}
         <div
-          className="pointer-events-auto rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden
-                    bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.05),rgba(0,0,0,0)_60%)] backdrop-blur-sm"
+          aria-hidden
+          className="absolute pointer-events-none -z-10 w-[min(90vw,1280px)] h-[min(60vw,720px)]
+                    rounded-[28px] blur-3xl opacity-60
+                    bg-[conic-gradient(at_30%_20%,#a78bfa_0deg,#22d3ee_120deg,#38bdf8_240deg,#a78bfa_360deg)]
+                    animate-pulse"
+          style={{ animationDuration: "6s" }}
+        />
+        {/* Glass/card + canvas */}
+        <div
+          className="pointer-events-auto relative rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden
+                    backdrop-blur-md bg-[rgba(15,23,42,0.65)]
+                    bg-[radial-gradient(120%_80%_at_50%_-20%,rgba(255,255,255,0.06),rgba(0,0,0,0)_60%)]"
           style={{ width: viewport.width, height: viewport.height }}
         >
+          <div className="pointer-events-none absolute inset-0 ring-1 ring-white/10 rounded-2xl" />
           <canvas
             ref={canvasRef}
-            className="block w-full h-full bg-slate-950 touch-none"
+            className="block w-full h-full bg-slate-950/60"
             onPointerDown={(e) => {
               const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
               const x = e.clientX - rect.left;
               const y = e.clientY - rect.top;
-
               if (touchRef.current.id === null) {
                 (e.target as Element).setPointerCapture(e.pointerId);
                 touchRef.current = { id: e.pointerId, startX: x, startY: y, dx: 0, dy: 0 };
@@ -592,7 +604,6 @@ export default function PortfolioGame() {
                 const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
-                // clamp the knob to a radius for nicer control
                 const R = 34;
                 let dx = x - touchRef.current.startX;
                 let dy = y - touchRef.current.startY;
@@ -611,21 +622,27 @@ export default function PortfolioGame() {
         </div>
       </div>
 
+
       {/* Overlays */}
-      <div className="pointer-events-auto absolute top-0 left-0 right-0 z-10 px-6 py-3 flex items-center justify-between bg-gradient-to-b from-slate-900/80 to-transparent">
-        <div className="text-2xl font-bold">dting.dev</div>
-          <nav className="hidden md:flex gap-6 text-sm opacity-80">
-            {ZONES.map((z) => (
-              <button
-                key={z.id}
-                onClick={() => openZone(z.id)}
-                className="hover:opacity-100 underline-offset-4 hover:underline"
-              >
-                {z.label}
-              </button>
-            ))}
-          </nav>
-      </div>
+      {/* Header (glass) */}
+      <header className="fixed top-0 left-0 right-0 z-30">
+        <div className="mx-auto max-w-6xl px-6 py-3 backdrop-blur-md bg-white/5 border-b border-white/10">
+          <div className="flex items-center justify-between">
+            <a href="/" className="text-lg font-semibold tracking-tight">yourdomain.dev</a>
+            <nav className="hidden md:flex gap-6 text-sm">
+              {ZONES.map((z) => (
+                <a
+                  key={z.id}
+                  href={`#${z.id}`}
+                  className="opacity-80 hover:opacity-100 underline-offset-4 hover:underline"
+                >
+                  {z.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </div>
+      </header>
 
       <div className="pointer-events-none absolute left-4 top-16 z-10 text-sm opacity-80">
         Press <span className="font-semibold">Esc</span> to close a panel.
@@ -633,59 +650,59 @@ export default function PortfolioGame() {
 
       {zoneData && (
         <div role="dialog" aria-modal="true"
-             className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden"
-             onClick={() => closeZone()}>
-           <div
-             className="max-w-3xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col max-h-[min(85vh,800px)]"
-             onClick={(e) => e.stopPropagation()}
-           >
-             {/* Sticky header */}
-             <div className="sticky top-0 z-10 px-6 py-4 bg-slate-900/95 backdrop-blur rounded-t-2xl border-b border-white/10">
-               <h2 className="text-2xl font-semibold">{zoneData.label}</h2>
-               <button
-                 onClick={() => setActiveZone(null)}
-                 className="absolute right-4 top-3 rounded-full px-3 py-1 bg-white/10 hover:bg-white/20"
-                 aria-label="Close"
-               >
-                 ✕
-               </button>
-             </div>
-          
-             {/* Scrollable body */}
-             <div className="px-6 pb-6 pt-3 overflow-y-auto">
-               <p className="opacity-90 leading-relaxed">{zoneData.blurb}</p>
-            
-            {zoneData.id === "about" && (
-              <div className="mt-6 grid md:grid-cols-[160px,1fr] gap-6 items-start">
-                {/* Left: photo (replace src) */}
-                {/* If you don’t have a photo yet, keep the placeholder div below instead */}
-                {/* <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" /> */}
-                <div className="aspect-square rounded-xl bg-white/5" />
+          className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden"
+          onClick={() => closeZone()}>
+          <div
+            className="max-w-3xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col max-h-[min(85vh,800px)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Sticky header */}
+            <div className="sticky top-0 z-10 px-6 py-4 bg-slate-900/95 backdrop-blur rounded-t-2xl border-b border-white/10">
+              <h2 className="text-2xl font-semibold">{zoneData.label}</h2>
+              <button
+                onClick={() => setActiveZone(null)}
+                className="absolute right-4 top-3 rounded-full px-3 py-1 bg-white/10 hover:bg-white/20"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
 
-                {/* Right: bio + links */}
-                <div className="space-y-3">
-                  <p>
-                    I’m David, a UBC student building real-time audio tools (pitch-shifting, pYIN/librosa),
-                    playful JS/React experiences, and performance-minded web apps. I like shipping scrappy
-                    MVPs fast, then polishing the UX.
-                  </p>
-                  <ul className="list-disc list-inside opacity-90">
-                    <li>Current: interactive portfolio game (this site!)</li>
-                    <li>Ongoing: Melodyne-style plugin for Ableton</li>
-                    <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
-                  </ul>
-                  <div className="flex flex-wrap gap-3 pt-1">
-                    <a className="underline" href="/resume.pdf" target="_blank" rel="noreferrer">Résumé</a>
-                    <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
-                    <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
-                    <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
+            {/* Scrollable body */}
+            <div className="px-6 pb-6 pt-2 overflow-y-auto min-h-0 max-h-[calc(min(85vh,800px)-64px)]">
+              <p className="opacity-90 leading-relaxed">{zoneData.blurb}</p>
+
+              {zoneData.id === "about" && (
+                <div className="mt-3 grid md:grid-cols-[160px,1fr] gap-6 items-start">
+                  {/* Left: photo (replace src) */}
+                  {/* If you don’t have a photo yet, keep the placeholder div below instead */}
+                  {/* <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" /> */}
+                  <div className="aspect-square rounded-xl bg-white/5" />
+
+                  {/* Right: bio + links */}
+                  <div className="space-y-3">
+                    <p>
+                      I’m David, a UBC student building real-time audio tools (pitch-shifting, pYIN/librosa),
+                      playful JS/React experiences, and performance-minded web apps. I like shipping scrappy
+                      MVPs fast, then polishing the UX.
+                    </p>
+                    <ul className="list-disc list-inside opacity-90">
+                      <li>Current: interactive portfolio game (this site!)</li>
+                      <li>Ongoing: Melodyne-style plugin for Ableton</li>
+                      <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
+                    </ul>
+                    <div className="flex flex-wrap gap-3 pt-1">
+                      <a className="underline" href="/resume.pdf" target="_blank" rel="noreferrer">Résumé</a>
+                      <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
+                      <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
+                      <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>  
       )}
 
       <footer className="pointer-events-auto absolute bottom-2 right-3 z-10 text-xs opacity-60">
