@@ -626,8 +626,10 @@ export default function PortfolioGame() {
       {/* Overlays */}
       {/* Header (glass) */}
       <header className="fixed top-0 left-0 right-0 z-30">
-        <div className="mx-auto max-w-6xl px-6 py-3 backdrop-blur-md bg-white/5 border-b border-white/10">
-          <div className="flex items-center justify-between">
+        {/* Full-width background strip */}
+        <div className="w-full backdrop-blur-md bg-white/5 border-b border-white/10">
+          {/* Centered content inside */}
+          <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
             <a href="/" className="text-lg font-semibold tracking-tight">yourdomain.dev</a>
             <nav className="hidden md:flex gap-6 text-sm">
               {ZONES.map((z) => (
@@ -644,9 +646,9 @@ export default function PortfolioGame() {
         </div>
       </header>
 
-      <div className="pointer-events-none absolute left-4 top-16 z-10 text-sm opacity-80">
+      {/* <div className="pointer-events-none absolute left-4 top-16 z-10 text-sm opacity-80">
         Press <span className="font-semibold">Esc</span> to close a panel.
-      </div>
+      </div> */}
 
       {zoneData && (
         <div role="dialog" aria-modal="true"
