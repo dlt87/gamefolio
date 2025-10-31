@@ -518,7 +518,7 @@ export default function PortfolioGame() {
         ctx.save();
         ctx.setTransform(1,0,0,1,0,0);
 
-        const cx = 24;
+        // const cx = 24;
         const cy = viewport.height - 24;
         const r = 16;
 
