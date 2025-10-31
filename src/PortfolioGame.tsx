@@ -287,6 +287,15 @@ export default function PortfolioGame() {
     let raf = 0;
     let last = performance.now();
 
+    const onVis = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+      } else {
+        last = performance.now();
+        raf = requestAnimationFrame(step);
+      }
+    };
+
     const step = (now: number) => {
       const dt = Math.min(0.033, (now - last) / 1000);
       last = now;
@@ -371,6 +380,7 @@ export default function PortfolioGame() {
       const cam = {
         x: lerp(camera.x, desiredX, 0.12),
         y: lerp(camera.y, desiredY, 0.12),
+        zoom: camera.zoom,
       };
 
       // Save lightweight state
@@ -596,14 +606,6 @@ export default function PortfolioGame() {
       }
 
       raf = requestAnimationFrame(step);
-      const onVis = () => {
-        if (document.hidden) {
-          cancelAnimationFrame(raf);
-        } else {
-          last = performance.now();
-          raf = requestAnimationFrame(step);
-        }
-      };
       document.addEventListener("visibilitychange", onVis);
     };
 
