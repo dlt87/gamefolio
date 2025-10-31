@@ -202,10 +202,10 @@ export default function PortfolioGame() {
   }, []);
 
   // Open/close helpers that also update the URL (no history spam)
-  const openZone = (id: string) => {
-    setActiveZone(id);
-    history.replaceState(null, "", `#${id}`);
-  };
+  // const openZone = (id: string) => {
+  //   setActiveZone(id);
+  //   history.replaceState(null, "", `#${id}`);
+  // };
   const closeZone = () => {
     setActiveZone(null);
     history.replaceState(null, "", " ");
