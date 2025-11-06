@@ -21,7 +21,7 @@ const ROWS = WORLD.height / TILE;         // 1200/40 = 30
 const ZONES = [
   { id: "about", label: "About Me", color: "#6EE7B7", rect: { x: 180, y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps." },
   { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
-  { id: "music", label: "Music / Audio", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "Audio demos..." },
+  { id: "music", label: "Music", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "" },
   { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
 ];
 
@@ -38,6 +38,9 @@ const mimeFor = (url: string) => {
 // List your audio snippets here (title + Drive file ID)
 const AUDIO_SNIPPETS = [
   { title: "DNA - BTS remake", id: "1eKdES58tGEVlESbv4kNjRuUQtzu01nLH", url: "/snippets/dna.wav" },
+  { title: "Misty (acapella) Preview", id: "DRIVE_FILE_ID_2", url: "/snippets/misty.wav" },
+  { title: "Caledonia (acapella) Preview", id: "DRIVE_FILE_ID_3", url: "/snippets/calereverb.wav" },
+  { title: "Jazz Neo Soul Preview", id: "DRIVE_FILE_ID_4", url: "/snippets/simplebeat.wav" },
 ];
 
 // --- TILEMAP ---
@@ -767,7 +770,7 @@ export default function PortfolioGame() {
           className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden"
           onClick={() => closeZone()}>
           <div
-            className="max-w-3xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col max-h-[min(85vh,800px)]"
+            className="max-w-4xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col max-h-[min(85vh,800px)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Sticky header */}
@@ -847,6 +850,34 @@ export default function PortfolioGame() {
                     signal processing, which is why I’m building a pitch-correction plugin as a side project.
                   </p>
 
+                  <p className="opacity-90">
+                    Below are some demos of my own music productions over the years:
+                  </p>
+
+                  {/* YouTube embed (responsive 16:9) */}
+                  <div className="mb-4">
+                    <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+                      <iframe
+                        src="https://www.youtube.com/embed/Px3x7RFv3QU"
+                        title="DNA - BTS remake"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fallback link */}
+                  <a
+                    className="underline opacity-80 hover:opacity-100"
+                    href="https://www.youtube.com/playlist?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB&index=2"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open playlist on YouTube
+                  </a>
+
                   {/* Responsive YouTube playlist embed */}
                   <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
                     <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
@@ -871,16 +902,12 @@ export default function PortfolioGame() {
                   {/* Fallback link */}
                   <a
                     className="underline opacity-80 hover:opacity-100"
-                    href="https://www.youtube.com/playlist?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB&index=2"
+                    href="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/view?usp=sharing"
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Open playlist on YouTube
+                    Open video on Google Drive
                   </a>
-
-                  <p className="opacity-90">
-                    Below are some demos of my own music productions:
-                  </p>
 
                   {/* Google Drive video embed */}
                   <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
@@ -901,15 +928,6 @@ export default function PortfolioGame() {
                     </div>
                   </div>
 
-                  {/* Fallback link */}
-                  <a
-                    className="underline opacity-80 hover:opacity-100"
-                    href="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/view?usp=sharing"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open video on Google Drive
-                  </a>
                   {/* Audio snippet list */}
                   <div className="mt-6">
                     <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
@@ -919,8 +937,18 @@ export default function PortfolioGame() {
                         // If you host the file in public/, set a.url = "/snippets/yourfile.wav" (instead of a Drive ID)
                         const src = a.url ?? driveDl(a.id); // prefer a.url (public) but fall back to Drive id
                         return (
-                          <li key={a.id} className="...">
-                            {/* ...existing markup... */}
+                          <li key={a.id} className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{a.title}</div>
+                              <a
+                                href={src}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs opacity-80 underline"
+                              >
+                                Open
+                              </a>
+                            </div>
                             <audio controls preload="none" className="w-full" crossOrigin="anonymous">
                               <source src={src} type={mimeFor(src)} />
                               Your browser does not support the audio element.
