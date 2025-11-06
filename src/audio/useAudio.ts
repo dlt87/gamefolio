@@ -31,6 +31,8 @@ export function useAudio(src: string) {
   const rafRef = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [levels, setLevels] = useState<Uint8Array | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +47,12 @@ export function useAudio(src: string) {
       setIsPlaying(false);
       audioManager.release(el);
     };
+    const onTime = () => {
+      try { setCurrentTime(el.currentTime || 0); } catch {}
+    };
+    const onLoaded = () => {
+      try { setDuration(isFinite(el.duration) ? el.duration : null); } catch {}
+    };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onCanPlay = () => setError(null);
@@ -54,11 +62,13 @@ export function useAudio(src: string) {
       console.warn("Audio element error:", el.error);
     };
 
-    el.addEventListener("ended", onEnded);
+  el.addEventListener("ended", onEnded);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("canplay", onCanPlay);
     el.addEventListener("error", onError);
+  el.addEventListener("timeupdate", onTime);
+  el.addEventListener("loadedmetadata", onLoaded);
 
     return () => {
   el.removeEventListener("ended", onEnded);
@@ -66,6 +76,8 @@ export function useAudio(src: string) {
   el.removeEventListener("pause", onPause);
   el.removeEventListener("canplay", onCanPlay);
   el.removeEventListener("error", onError);
+  el.removeEventListener("timeupdate", onTime);
+  el.removeEventListener("loadedmetadata", onLoaded);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       try {
         el.pause();
@@ -157,11 +169,17 @@ export function useAudio(src: string) {
     }
   };
 
+  const seek = (t: number) => {
+    if (!audioElRef.current) return;
+    try { audioElRef.current.currentTime = Math.max(0, Math.min(t, audioElRef.current.duration || t)); } catch {}
+    setCurrentTime(audioElRef.current.currentTime || 0);
+  };
+
   const toggle = async () => {
     if (isPlaying) pause(); else await play();
   };
 
-  return { audioEl: audioElRef.current, isPlaying, play, pause, toggle, levels, error };
+  return { audioEl: audioElRef.current, isPlaying, play, pause, toggle, levels, error, currentTime, duration, seek };
 }
 
 export default useAudio;

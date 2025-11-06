@@ -4,8 +4,10 @@ import { useAudio } from "./audio/useAudio";
 // Move AudioPlayer out of the main component and memoize so frequent game-loop
 // re-renders don't remount or update the audio UI every frame.
 const AudioPlayerInner = ({ src }: { src: string }) => {
-  const { isPlaying, toggle, levels, error } = useAudio(src);
+  const { isPlaying, toggle, levels, error, currentTime, duration, seek } = useAudio(src);
   const cvsRef = useRef<HTMLCanvasElement | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
+  const dragging = useRef(false);
 
   // draw the analyser levels (simple bar meter)
   useEffect(() => {
@@ -45,6 +47,47 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
         </button>
         <div className="text-xs opacity-80">Preview</div>
       </div>
+      {/* Progress scrubber */}
+      <div
+        ref={progressRef}
+        tabIndex={0}
+        role="slider"
+        aria-valuemin={0}
+        aria-valuemax={duration || 0}
+        aria-valuenow={currentTime}
+        className="w-full h-3 bg-white/6 rounded-md relative cursor-pointer mt-2"
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          const el = progressRef.current; if (!el || !duration) return;
+          dragging.current = true;
+          const rect = el.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const t = (x / rect.width) * duration;
+          seek(t);
+        }}
+        onPointerMove={(e) => {
+          if (!dragging.current) return;
+          const el = progressRef.current; if (!el || !duration) return;
+          const rect = el.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const t = Math.max(0, Math.min(1, x / rect.width)) * duration;
+          seek(t);
+        }}
+        onPointerUp={() => { dragging.current = false; }}
+        onPointerCancel={() => { dragging.current = false; }}
+        onKeyDown={(e) => {
+          if (!duration) return;
+          if (e.key === "ArrowLeft") { e.preventDefault(); seek(Math.max(0, currentTime - 5)); }
+          if (e.key === "ArrowRight") { e.preventDefault(); seek(Math.min(duration, currentTime + 5)); }
+        }}
+      >
+        <div className="absolute inset-0 rounded-md overflow-hidden">
+          <div
+            className="h-full bg-white/40"
+            style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }}
+          />
+        </div>
+      </div>
       <canvas ref={cvsRef} width={220} height={36} className="w-full rounded-md bg-white/3" />
       {error && <div className="text-xs text-red-400">{error}</div>}
     </div>
@@ -55,7 +98,7 @@ export const AudioPlayer = memo(AudioPlayerInner);
 
 // --- Tweakable gameplay constants ---
 const WORLD = { width: 2000, height: 1200 };
-const PLAYER = { speed: 220, size: 28 };
+const PLAYER = { speed: 320, size: 28 };
 
 const ASPECT = 16 / 9;
 const PADDING = 48; // min breathing room around the window
@@ -248,6 +291,9 @@ export default function PortfolioGame() {
   const overlapRef = useRef<string | null>(null);
   // Minimap toggle
   const [showMinimap, setShowMinimap] = useState(true);
+
+  // Refs for snippet list items to enable keyboard navigation / focus
+  const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   // Touch joystick state
   const touchRef = useRef<{ id: number | null, startX: number, startY: number, dx: number, dy: number }>({ id: null, startX: 0, startY: 0, dx: 0, dy: 0 });
@@ -983,28 +1029,71 @@ export default function PortfolioGame() {
                   <div className="mt-6">
                     <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
 
-                    <ul className="space-y-3">
-                      {AUDIO_SNIPPETS.map((a) => {
-                        // If you host the file in public/, set a.url = "/snippets/yourfile.wav" (instead of a Drive ID)
-                        const src = a.url ?? driveDl(a.id); // prefer a.url (public) but fall back to Drive id
-                        return (
-                          <li key={a.id} className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium">{a.title}</div>
-                              <a
-                                href={src}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs opacity-80 underline"
-                              >
-                                Open
-                              </a>
-                            </div>
-                            <AudioPlayer src={src} />
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    {/* Scrollable list with simple prev/next controls */}
+                    <div className="flex items-center gap-3 mb-2">
+                      <button
+                        type="button"
+                        className="rounded bg-white/6 px-2 py-1 text-sm"
+                        onClick={() => {
+                          // focus first
+                          const first = itemRefs.current[AUDIO_SNIPPETS[0].id];
+                          first?.focus();
+                        }}
+                      >
+                        First
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded bg-white/6 px-2 py-1 text-sm"
+                        onClick={() => {
+                          // focus last
+                          const last = itemRefs.current[AUDIO_SNIPPETS[AUDIO_SNIPPETS.length - 1].id];
+                          last?.focus();
+                        }}
+                      >
+                        Last
+                      </button>
+                      <div className="text-xs opacity-80">Use Tab / Shift+Tab to navigate, Enter to toggle play.</div>
+                    </div>
+
+                    <div className="space-y-3 pr-2">
+                      <ul className="space-y-3">
+                        {AUDIO_SNIPPETS.map((a, idx) => {
+                          const src = a.url ?? driveDl(a.id);
+                          return (
+                            <li
+                              key={a.id}
+                              ref={(el) => { itemRefs.current[a.id] = el; }}
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  // find a button inside and click it
+                                  const btn = (e.currentTarget as HTMLElement).querySelector("button");
+                                  if (btn) {
+                                    (btn as HTMLButtonElement).click();
+                                  }
+                                }
+                                if (e.key === "ArrowDown") {
+                                  const next = AUDIO_SNIPPETS[Math.min(AUDIO_SNIPPETS.length - 1, idx + 1)];
+                                  itemRefs.current[next.id]?.focus();
+                                }
+                                if (e.key === "ArrowUp") {
+                                  const prev = AUDIO_SNIPPETS[Math.max(0, idx - 1)];
+                                  itemRefs.current[prev.id]?.focus();
+                                }
+                              }}
+                              className="space-y-1 outline-none focus:ring-2 focus:ring-white/20 rounded-md p-2"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="font-medium">{a.title}</div>
+                                <a href={src} target="_blank" rel="noreferrer" className="text-xs opacity-80 underline">Open</a>
+                              </div>
+                              <AudioPlayer src={src} />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}
