@@ -28,12 +28,16 @@ const ZONES = [
 // Build a direct (streamable) URL from a Google Drive file ID
 const driveDl = (id: string) => `https://drive.google.com/uc?export=view&id=${id}`;
 
+const mimeFor = (url: string) => {
+  if (url.endsWith(".mp3")) return "audio/mpeg";
+  if (url.endsWith(".wav")) return "audio/wav";
+  if (url.endsWith(".ogg")) return "audio/ogg";
+  return "audio/mpeg";
+};
+
 // List your audio snippets here (title + Drive file ID)
-const AUDIO_SNIPPETS: { title: string; id: string }[] = [
-  { title: "DNA - BTS remake", id: "1eKdES58tGEVlESbv4kNjRuUQtzu01nLH" }, // <- your example wav
-  // Add more like:
-  // { title: "Vocal take 02 (raw)", id: "<FILE_ID>" },
-  // { title: "Pitch-shift demo +4", id: "<FILE_ID>" },
+const AUDIO_SNIPPETS = [
+  { title: "DNA - BTS remake", id: "1eKdES58tGEVlESbv4kNjRuUQtzu01nLH", url: "/snippets/dna.wav" },
 ];
 
 // --- TILEMAP ---
@@ -911,35 +915,19 @@ export default function PortfolioGame() {
                     <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
 
                     <ul className="space-y-3">
-                      {AUDIO_SNIPPETS.map((a) => (
-                        <li
-                          key={a.id}
-                          className="rounded-xl ring-1 ring-white/10 bg-white/5 p-4 flex flex-col gap-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{a.title}</span>
-                            <a
-                              className="text-sm underline opacity-80 hover:opacity-100"
-                              href={driveDl(a.id)}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                            >
-                              Download
-                            </a>
-                          </div>
-
-                          <audio
-                            controls
-                            preload="none"
-                            className="w-full"
-                            crossOrigin="anonymous"
-                          >
-                            <source src={driveDl(a.id)} type="audio/mpeg" />
-                            Your browser does not support the audio element.
-                          </audio>
-                        </li>
-                      ))}
+                      {AUDIO_SNIPPETS.map((a) => {
+                        // If you host the file in public/, set a.url = "/snippets/yourfile.wav" (instead of a Drive ID)
+                        const src = a.url ?? driveDl(a.id); // prefer a.url (public) but fall back to Drive id
+                        return (
+                          <li key={a.id} className="...">
+                            {/* ...existing markup... */}
+                            <audio controls preload="none" className="w-full" crossOrigin="anonymous">
+                              <source src={src} type={mimeFor(src)} />
+                              Your browser does not support the audio element.
+                            </audio>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>
