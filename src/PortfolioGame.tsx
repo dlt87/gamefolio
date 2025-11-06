@@ -11,6 +11,7 @@ const NAV_H = 56;        // height of your fixed header (px)
 const FOOTER_H = 28;     // bottom breathing room
 const EXTRA_GAP = 12;    // extra safety gap
 const MAX_VIEW = { width: 960, height: 540 }; // <= make the game box smaller (16:9)
+const MINIMAP_MIN_WIDTH = 640; // hide minimap on narrow/mobile viewports
 
 // Tiles
 const TILE = 40;                          // tile size in px (fits your world nicely)
@@ -25,7 +26,7 @@ const ZONES = [
 ];
 
 // Build a direct (streamable) URL from a Google Drive file ID
-const driveDl = (id: string) => `https://docs.google.com/uc?export=download&id=${id}`;
+const driveDl = (id: string) => `https://drive.google.com/uc?export=view&id=${id}`;
 
 // List your audio snippets here (title + Drive file ID)
 const AUDIO_SNIPPETS: { title: string; id: string }[] = [
@@ -53,10 +54,10 @@ for (let r = 1; r < ROWS - 1; r++) {
 }
 
 // (Optional) central “plaza” like your old walls:
-const xL = Math.floor(600 / TILE);   // 15
-const xR = Math.floor(1400 / TILE);  // 35
-const yTop = Math.floor(300 / TILE); // 7 or 8 depending on rounding
-const yBot = Math.floor(560 / TILE); // 14
+const xL = Math.floor(900 / TILE);   // 15
+const xR = Math.floor(1150 / TILE);  // 35
+const yTop = Math.floor(400 / TILE); // 7 or 8 depending on rounding
+const yBot = Math.floor(600 / TILE); // 14
 
 // Horizontal bars
 {
@@ -73,14 +74,12 @@ const yBot = Math.floor(560 / TILE); // 14
 for (let r = yTop; r <= yBot; r++) {
   const arr = MAP_ROWS_BASE[r].split("");
   arr[xL] = "#";
-  arr[Math.floor(1360 / TILE)] = "#";
+  arr[Math.floor(1150 / TILE)] = "#";
   MAP_ROWS_BASE[r] = arr.join("");
 }
 
 // Freeze map
 const MAP_ROWS: string[] = MAP_ROWS_BASE;
-
-// const MINIMAP = { w: 180, h: 108, padding: 12 }; // 16:9 mini
 
 function computeViewport() {
   // available space inside the page (leave some padding + account for fixed header/footer)
@@ -215,6 +214,18 @@ export default function PortfolioGame() {
     return () => {
       window.removeEventListener("resize", onResize);
       cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Prevent page from scrolling while the game is mounted
+  useEffect(() => {
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
     };
   }, []);
 
@@ -573,27 +584,29 @@ export default function PortfolioGame() {
 
         // Minimap (toggle with 'M')
         if (showMinimap) {
-          const mmW = 180, mmH = 108, pad = 12;
-          const mmX = pad, mmY = pad + 28;
-          const sx = mmW / WORLD.width;
-          const sy = mmH / WORLD.height;
+          if (showMinimap && viewport.width >= MINIMAP_MIN_WIDTH) {
+            const mmW = 180, mmH = 108, pad = 12;
+            const mmX = pad, mmY = pad + 28;
+            const sx = mmW / WORLD.width;
+            const sy = mmH / WORLD.height;
 
-          ctx.fillStyle = "rgba(0,0,0,0.45)";
-          ctx.fillRect(mmX - 6, mmY - 6, mmW + 12, mmH + 12);
-          ctx.fillStyle = "rgba(30,41,59,0.9)";
-          ctx.fillRect(mmX, mmY, mmW, mmH);
+            ctx.fillStyle = "rgba(0,0,0,0.45)";
+            ctx.fillRect(mmX - 6, mmY - 6, mmW + 12, mmH + 12);
+            ctx.fillStyle = "rgba(30,41,59,0.9)";
+            ctx.fillRect(mmX, mmY, mmW, mmH);
 
-          // Zones
-          for (const z of ZONES) {
-            const { x, y, w, h } = z.rect;
-            ctx.fillStyle = z.color + "CC";
-            ctx.fillRect(mmX + x * sx, mmY + y * sy, Math.max(2, w * sx), Math.max(2, h * sy));
+            // Zones
+            for (const z of ZONES) {
+              const { x, y, w, h } = z.rect;
+              ctx.fillStyle = z.color + "CC";
+              ctx.fillRect(mmX + x * sx, mmY + y * sy, Math.max(2, w * sx), Math.max(2, h * sy));
+            }
+            // Player
+            ctx.fillStyle = "#A78BFA";
+            ctx.beginPath();
+            ctx.arc(mmX + (next.x + next.w / 2) * sx, mmY + (next.y + next.h / 2) * sy, 3, 0, Math.PI * 2);
+            ctx.fill();
           }
-          // Player
-          ctx.fillStyle = "#A78BFA";
-          ctx.beginPath();
-          ctx.arc(mmX + (next.x + next.w / 2) * sx, mmY + (next.y + next.h / 2) * sy, 3, 0, Math.PI * 2);
-          ctx.fill();
         }
 
         // === Stamina ring (screen space) ===
@@ -774,7 +787,8 @@ export default function PortfolioGame() {
                   {/* Left: photo (replace src) */}
                   {/* If you don’t have a photo yet, keep the placeholder div below instead */}
                   {/* <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" /> */}
-                  <div className="aspect-square rounded-xl bg-white/5" />
+                  {/* <div className="aspect-square rounded-xl bg-white/5" /> */}
+                  <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" />
 
                   {/* Right: bio + links */}
                   <div className="space-y-3">
@@ -892,46 +906,44 @@ export default function PortfolioGame() {
                   >
                     Open video on Google Drive
                   </a>
+                  {/* Audio snippet list */}
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
+
+                    <ul className="space-y-3">
+                      {AUDIO_SNIPPETS.map((a) => (
+                        <li
+                          key={a.id}
+                          className="rounded-xl ring-1 ring-white/10 bg-white/5 p-4 flex flex-col gap-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{a.title}</span>
+                            <a
+                              className="text-sm underline opacity-80 hover:opacity-100"
+                              href={driveDl(a.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                            >
+                              Download
+                            </a>
+                          </div>
+
+                          <audio
+                            controls
+                            preload="none"
+                            className="w-full"
+                            crossOrigin="anonymous"
+                          >
+                            <source src={driveDl(a.id)} type="audio/mpeg" />
+                            Your browser does not support the audio element.
+                          </audio>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
-
-              {/* Audio snippet list */}
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
-
-                <ul className="space-y-3">
-                  {AUDIO_SNIPPETS.map((a) => (
-                    <li
-                      key={a.id}
-                      className="rounded-xl ring-1 ring-white/10 bg-white/5 p-4 flex flex-col gap-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{a.title}</span>
-                        <a
-                          className="text-sm underline opacity-80 hover:opacity-100"
-                          href={driveDl(a.id)}
-                          target="_blank"
-                          rel="noreferrer"
-                          download
-                        >
-                          Download
-                        </a>
-                      </div>
-
-                      <audio
-                        controls
-                        preload="none"
-                        className="w-full"
-                        src={driveDl(a.id)}
-                      >
-                        Your browser does not support the audio element.
-                      </audio>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-
             </div>
           </div>
         </div>
@@ -942,7 +954,7 @@ export default function PortfolioGame() {
         Move with WASD • Shift to sprint • M toggles minimap
       </div>
 
-      <footer className="pointer-events-auto absolute bottom-2 right-3 z-10 text-xs opacity-60">
+      <footer className="pointer-events-auto absolute bottom-8 right-3 z-10 text-xs opacity-60">
         © {new Date().getFullYear()} dting.dev — Built as a tiny game.
       </footer>
     </div>
