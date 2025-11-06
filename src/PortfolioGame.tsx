@@ -1,5 +1,57 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import { useAudio } from "./audio/useAudio";
+
+// Move AudioPlayer out of the main component and memoize so frequent game-loop
+// re-renders don't remount or update the audio UI every frame.
+const AudioPlayerInner = ({ src }: { src: string }) => {
+  const { isPlaying, toggle, levels, error } = useAudio(src);
+  const cvsRef = useRef<HTMLCanvasElement | null>(null);
+
+  // draw the analyser levels (simple bar meter)
+  useEffect(() => {
+    const cvs = cvsRef.current;
+    if (!cvs) return;
+    const ctx = cvs.getContext("2d");
+    if (!ctx) return;
+
+    const draw = () => {
+      if (!levels) {
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        return;
+      }
+      const w = cvs.width;
+      const h = cvs.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#94A3B8"; // slate
+      const barW = Math.max(1, w / levels.length);
+      for (let i = 0; i < levels.length; i++) {
+        const v = levels[i] / 255;
+        const bh = v * h;
+        ctx.fillRect(i * barW, h - bh, barW - 1, bh);
+      }
+    };
+    draw();
+  }, [levels]);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          className="rounded bg-white/10 px-3 py-1 text-sm"
+          aria-pressed={isPlaying}
+        >
+          {isPlaying ? "Pause" : "Play"}
+        </button>
+        <div className="text-xs opacity-80">Preview</div>
+      </div>
+      <canvas ref={cvsRef} width={220} height={36} className="w-full rounded-md bg-white/3" />
+      {error && <div className="text-xs text-red-400">{error}</div>}
+    </div>
+  );
+};
+
+export const AudioPlayer = memo(AudioPlayerInner);
 
 // --- Tweakable gameplay constants ---
 const WORLD = { width: 2000, height: 1200 };
@@ -672,54 +724,7 @@ export default function PortfolioGame() {
 
   const zoneData = ZONES.find(z => z.id === activeZone);
 
-  // Small inline AudioPlayer using the useAudio hook.
-  function AudioPlayer({ src }: { src: string }) {
-    const { isPlaying, toggle, levels, error } = useAudio(src);
-    const cvsRef = useRef<HTMLCanvasElement | null>(null);
-
-    // draw the analyser levels (simple bar meter)
-    useEffect(() => {
-      const cvs = cvsRef.current;
-      if (!cvs) return;
-      const ctx = cvs.getContext("2d");
-      if (!ctx) return;
-
-      const draw = () => {
-        if (!levels) {
-          ctx.clearRect(0, 0, cvs.width, cvs.height);
-          return;
-        }
-        const w = cvs.width;
-        const h = cvs.height;
-        ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = "#94A3B8"; // slate
-        const barW = Math.max(1, w / levels.length);
-        for (let i = 0; i < levels.length; i++) {
-          const v = levels[i] / 255;
-          const bh = v * h;
-          ctx.fillRect(i * barW, h - bh, barW - 1, bh);
-        }
-      };
-      draw();
-    }, [levels]);
-
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={(e) => { e.stopPropagation(); toggle(); }}
-            className="rounded bg-white/10 px-3 py-1 text-sm"
-            aria-pressed={isPlaying}
-          >
-            {isPlaying ? "Pause" : "Play"}
-          </button>
-          <div className="text-xs opacity-80">Preview</div>
-        </div>
-        <canvas ref={cvsRef} width={220} height={36} className="w-full rounded-md bg-white/3" />
-        {error && <div className="text-xs text-red-400">{error}</div>}
-      </div>
-    );
-  }
+  
 
   return (
     <div className="relative w-full h-screen bg-slate-900 text-white">
@@ -812,7 +817,8 @@ export default function PortfolioGame() {
 
       {zoneData && (
         <div role="dialog" aria-modal="true" aria-labelledby="zone-title"
-          className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden"
+          className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden pointer-events-auto"
+          style={{ zIndex: 99999 }}
           onClick={() => closeZone()}>
           <div
             className="max-w-4xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col max-h-[min(85vh,800px)]"

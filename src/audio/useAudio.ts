@@ -47,14 +47,25 @@ export function useAudio(src: string) {
     };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
+    const onCanPlay = () => setError(null);
+    const onError = () => {
+      const e = (el.error && el.error.message) ? el.error.message : "Audio playback error";
+      setError(e);
+      console.warn("Audio element error:", el.error);
+    };
+
     el.addEventListener("ended", onEnded);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
+    el.addEventListener("canplay", onCanPlay);
+    el.addEventListener("error", onError);
 
     return () => {
-      el.removeEventListener("ended", onEnded);
-      el.removeEventListener("play", onPlay);
-      el.removeEventListener("pause", onPause);
+  el.removeEventListener("ended", onEnded);
+  el.removeEventListener("play", onPlay);
+  el.removeEventListener("pause", onPause);
+  el.removeEventListener("canplay", onCanPlay);
+  el.removeEventListener("error", onError);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       try {
         el.pause();
@@ -99,13 +110,35 @@ export function useAudio(src: string) {
   const play = async () => {
     if (!audioElRef.current) return;
     // ensure graph (must be created after a user gesture in many browsers)
-    ensureAudioGraph();
+    const ok = ensureAudioGraph();
     try {
       // Claim this audio element so other players pause
       audioManager.claim(audioElRef.current);
       // Resume audio context if suspended (autoplay policy)
       if (ctxRef.current && ctxRef.current.state === "suspended") await ctxRef.current.resume();
-      await audioElRef.current.play();
+      // attempt to play; if AudioContext couldn't be created, still try the element directly
+      try {
+        await audioElRef.current.play();
+      } catch (err: any) {
+        // If play fails, surface a helpful error message
+        const msg = err?.message || String(err);
+        setError(msg);
+        console.warn("audio.play() failed:", err);
+        // If we couldn't create the audio graph but play failed, try loading the element then play once more
+        if (!ok) {
+          try {
+            audioElRef.current.load();
+            await audioElRef.current.play();
+          } catch (err2) {
+            const msg2 = (err2 as any)?.message || String(err2);
+            setError(msg2);
+            console.warn("audio.play() retry failed:", err2);
+            return;
+          }
+        } else {
+          return;
+        }
+      }
       setIsPlaying(true);
       if (analyserRef.current && !rafRef.current) pulse();
     } catch (err: any) {
