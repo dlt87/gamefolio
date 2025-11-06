@@ -1,6 +1,37 @@
 import { useEffect, useRef, useState, memo } from "react";
 import { useAudio } from "./audio/useAudio";
 
+// --- Tweakable gameplay constants ---
+const WORLD = { width: 2000, height: 1200 };
+const PLAYER = { speed: 320, size: 28 };
+
+const ASPECT = 16 / 9;
+const PADDING = 48; // min breathing room around the window
+
+const NAV_H = 56;        // height of your fixed header (px)
+const FOOTER_H = 28;     // bottom breathing room
+const EXTRA_GAP = 12;    // extra safety gap
+const MAX_VIEW = { width: 960, height: 540 }; // <= make the game box smaller (16:9)
+const MINIMAP_MIN_WIDTH = 640; // hide minimap on narrow/mobile viewports
+
+// Tiles
+const TILE = 40;                          // tile size in px (fits your world nicely)
+const COLS = WORLD.width / TILE;          // 2000/40 = 50
+const ROWS = WORLD.height / TILE;         // 1200/40 = 30
+
+const ZONES = [
+  { id: "about", label: "About Me", color: "#6EE7B7", rect: { x: 180, y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps." },
+  { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
+  { id: "music", label: "Music", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "" },
+  { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
+];
+
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 // Move AudioPlayer out of the main component and memoize so frequent game-loop
 // re-renders don't remount or update the audio UI every frame.
 const AudioPlayerInner = ({ src }: { src: string }) => {
@@ -13,23 +44,39 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
   useEffect(() => {
     const cvs = cvsRef.current;
     if (!cvs) return;
+
+    // Set physical pixels to match display size * DPR
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cvs.getBoundingClientRect();
+    cvs.width = rect.width * dpr;
+    cvs.height = rect.height * dpr;
+
     const ctx = cvs.getContext("2d");
     if (!ctx) return;
 
+    // Scale all drawing operations by DPR
+    ctx.scale(dpr, dpr);
+
     const draw = () => {
       if (!levels) {
-        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        ctx.clearRect(0, 0, rect.width, rect.height);
         return;
       }
-      const w = cvs.width;
-      const h = cvs.height;
-      ctx.clearRect(0, 0, w, h);
+      ctx.clearRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = "#94A3B8"; // slate
-      const barW = Math.max(1, w / levels.length);
+
+      const barW = Math.max(1, rect.width / levels.length);
+      const gap = Math.min(2, barW * 0.4); // Small gap between bars
+
       for (let i = 0; i < levels.length; i++) {
         const v = levels[i] / 255;
-        const bh = v * h;
-        ctx.fillRect(i * barW, h - bh, barW - 1, bh);
+        const bh = v * rect.height;
+        ctx.fillRect(
+          i * barW,
+          rect.height - bh,
+          barW - gap,
+          bh
+        );
       }
     };
     draw();
@@ -46,6 +93,9 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
           {isPlaying ? "Pause" : "Play"}
         </button>
         <div className="text-xs opacity-80">Preview</div>
+        <div className="text-xs opacity-80 ml-auto">
+          {formatTime(currentTime)} / {duration ? formatTime(duration) : '--:--'}
+        </div>
       </div>
       {/* Progress scrubber */}
       <div
@@ -55,7 +105,7 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
         aria-valuemin={0}
         aria-valuemax={duration || 0}
         aria-valuenow={currentTime}
-        className="w-full h-3 bg-white/6 rounded-md relative cursor-pointer mt-2"
+        className="group w-full h-2 bg-white/5 hover:bg-white/8 rounded-full relative cursor-pointer mt-2 transition-colors"
         onPointerDown={(e) => {
           e.stopPropagation();
           const el = progressRef.current; if (!el || !duration) return;
@@ -83,12 +133,13 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
       >
         <div className="absolute inset-0 rounded-md overflow-hidden">
           <div
-            className="h-full bg-white/40"
+            className="h-full bg-gradient-to-r from-white/40 to-white/50 transition-all ease-out"
             style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }}
           />
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full scale-0 group-hover:scale-100 transition-transform" />
         </div>
       </div>
-      <canvas ref={cvsRef} width={220} height={36} className="w-full rounded-md bg-white/3" />
+      <canvas ref={cvsRef} width={220} style={{ height: '36px' }} className="w-full rounded-md bg-white/3" />
       {error && <div className="text-xs text-red-400">{error}</div>}
     </div>
   );
@@ -96,35 +147,8 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
 
 export const AudioPlayer = memo(AudioPlayerInner);
 
-// --- Tweakable gameplay constants ---
-const WORLD = { width: 2000, height: 1200 };
-const PLAYER = { speed: 320, size: 28 };
-
-const ASPECT = 16 / 9;
-const PADDING = 48; // min breathing room around the window
-
-const NAV_H = 56;        // height of your fixed header (px)
-const FOOTER_H = 28;     // bottom breathing room
-const EXTRA_GAP = 12;    // extra safety gap
-const MAX_VIEW = { width: 960, height: 540 }; // <= make the game box smaller (16:9)
-const MINIMAP_MIN_WIDTH = 640; // hide minimap on narrow/mobile viewports
-
-// Tiles
-const TILE = 40;                          // tile size in px (fits your world nicely)
-const COLS = WORLD.width / TILE;          // 2000/40 = 50
-const ROWS = WORLD.height / TILE;         // 1200/40 = 30
-
-const ZONES = [
-  { id: "about", label: "About Me", color: "#6EE7B7", rect: { x: 180, y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps." },
-  { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
-  { id: "music", label: "Music", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "" },
-  { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
-];
-
 // Build a direct (streamable) URL from a Google Drive file ID
 const driveDl = (id: string) => `https://drive.google.com/uc?export=view&id=${id}`;
-
-
 
 // List your audio snippets here (title + Drive file ID)
 const AUDIO_SNIPPETS = [
@@ -770,7 +794,7 @@ export default function PortfolioGame() {
 
   const zoneData = ZONES.find(z => z.id === activeZone);
 
-  
+
 
   return (
     <div className="relative w-full h-screen bg-slate-900 text-white">
