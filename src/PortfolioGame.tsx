@@ -408,7 +408,10 @@ export default function PortfolioGame() {
           setActiveZone(save.activeZone);
         }
       }
-    } catch { }
+    } catch (e) {
+      // Persisted state might be stale/corrupted; ignore failures
+      console.warn("Failed to load saved state", e);
+    }
   }, []);
 
   // Keyboard
@@ -522,7 +525,7 @@ export default function PortfolioGame() {
       else s = Math.min(1, s + regen * dt);
       if (s !== stamina) setStamina(s);
 
-      let next = { ...player };
+  const next = { ...player };
 
       // Move with collision
       moveAndCollide(next, vx, vy, dt);
@@ -579,7 +582,10 @@ export default function PortfolioGame() {
           player: { x: next.x, y: next.y },
           activeZone
         }));
-      } catch { }
+      } catch (e) {
+        // Storage may be unavailable (e.g., private mode) — safe to ignore
+        console.warn("Failed to save state", e);
+      }
 
       setPlayer(next);
       setCamera(cam);
@@ -636,6 +642,76 @@ export default function PortfolioGame() {
               ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE);
             }
           }
+        }
+
+        // --- Ambient Fireflies in the Music zone ---
+        {
+          const music = ZONES.find(z => z.id === "music")!;
+          const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          const targetCount = prefersReduced ? 12 : 24;
+
+          // Spawn within music zone bounds when visible in viewport region
+          const visibleX0 = camera.x;
+          const visibleY0 = camera.y;
+          const visibleX1 = camera.x + vW;
+          const visibleY1 = camera.y + vH;
+          const musicVisible = !(music.rect.x + music.rect.w < visibleX0 || music.rect.x > visibleX1 || music.rect.y + music.rect.h < visibleY0 || music.rect.y > visibleY1);
+
+          if (musicVisible && firefliesRef.current.length < targetCount) {
+            // Throttle spawn rate
+            const nowMs = performance.now();
+            if (nowMs - lastFireflySpawnRef.current > 80) {
+              lastFireflySpawnRef.current = nowMs;
+              firefliesRef.current.push({
+                x: music.rect.x + Math.random() * music.rect.w,
+                y: music.rect.y + Math.random() * music.rect.h,
+                r: 1.2 + Math.random() * 1.8,
+                a: 0.15 + Math.random() * 0.35,
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
+                pulse: Math.random() * Math.PI * 2,
+              });
+            }
+          }
+
+          // Update
+          const ff = firefliesRef.current;
+          for (let i = ff.length - 1; i >= 0; i--) {
+            const p = ff[i];
+            // gentle drift
+            p.x += p.vx * dt * 0.5;
+            p.y += p.vy * dt * 0.5;
+            // slight acceleration toward random wandering
+            p.vx += (Math.random() - 0.5) * 2;
+            p.vy += (Math.random() - 0.5) * 2;
+            // clamp velocity
+            const sp = Math.hypot(p.vx, p.vy);
+            if (sp > 20) { p.vx = (p.vx / sp) * 20; p.vy = (p.vy / sp) * 20; }
+            // keep inside music zone (wrap)
+            if (p.x < music.rect.x) p.x = music.rect.x + music.rect.w;
+            if (p.x > music.rect.x + music.rect.w) p.x = music.rect.x;
+            if (p.y < music.rect.y) p.y = music.rect.y + music.rect.h;
+            if (p.y > music.rect.y + music.rect.h) p.y = music.rect.y;
+            // pulse alpha
+            p.pulse += dt * 2;
+          }
+
+          // Draw (use additive-like glow)
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          for (const p of firefliesRef.current) {
+            const pulse = (Math.sin(p.pulse) + 1) * 0.5; // 0..1
+            const alpha = p.a * (0.5 + 0.5 * pulse);
+            const radius = p.r * (0.85 + 0.3 * pulse);
+            const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 6);
+            gradient.addColorStop(0, `rgba(167,139,250,${alpha})`);
+            gradient.addColorStop(1, 'rgba(167,139,250,0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius * 6, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
         }
 
         // Update and draw particles
@@ -815,26 +891,26 @@ export default function PortfolioGame() {
           }
         }
 
-        // === Stamina ring (screen space) ===
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        // // === Stamina ring (screen space) ===
+        // ctx.save();
+        // ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-        // const cx = 24;
-        const cy = viewport.height - 24;
-        const r = 16;
+        // // const cx = 24;
+        // const cy = viewport.height - 24;
+        // const r = 16;
 
-        ctx.globalAlpha = 0.9;
-        ctx.strokeStyle = "rgba(255,255,255,0.25)";
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(24, cy, r, 0, Math.PI * 2); ctx.stroke();
+        // ctx.globalAlpha = 0.9;
+        // ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        // ctx.lineWidth = 4;
+        // ctx.beginPath(); ctx.arc(24, cy, r, 0, Math.PI * 2); ctx.stroke();
 
-        // arc for current stamina
-        ctx.strokeStyle = "#A78BFA";
-        ctx.beginPath();
-        ctx.arc(24, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * stamina);
-        ctx.stroke();
+        // // arc for current stamina
+        // ctx.strokeStyle = "#A78BFA";
+        // ctx.beginPath();
+        // ctx.arc(24, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * stamina);
+        // ctx.stroke();
 
-        ctx.restore();
+        // ctx.restore();
       }
 
       // Zone enter (edge trigger)
@@ -874,6 +950,10 @@ export default function PortfolioGame() {
   }, [viewport]);
 
   const zoneData = ZONES.find(z => z.id === activeZone);
+
+  // Ambient fireflies (independent from movement trail)
+  const firefliesRef = useRef<{x:number; y:number; r:number; a:number; vx:number; vy:number; pulse:number;}[]>([]);
+  const lastFireflySpawnRef = useRef<number>(0);
 
 
 
@@ -1055,9 +1135,9 @@ export default function PortfolioGame() {
                       </ul>
 
                       <div className="flex flex-wrap gap-3 pt-1">
-                        <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
-                        <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
-                        <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
+                        <a className="underline font-semibold text-blue-600 hover:text-blue-700" href="mailto:dting01@student.ubc.ca">Email</a>
+                        <a className="underline font-semibold text-blue-600 hover:text-blue-700" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
+                        <a className="underline font-semibold text-blue-600 hover:text-blue-700" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
                       </div>
                     </div>
                   </div>
