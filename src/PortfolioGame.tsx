@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAudio } from "./audio/useAudio";
 
 // --- Tweakable gameplay constants ---
 const WORLD = { width: 2000, height: 1200 };
@@ -28,12 +29,7 @@ const ZONES = [
 // Build a direct (streamable) URL from a Google Drive file ID
 const driveDl = (id: string) => `https://drive.google.com/uc?export=view&id=${id}`;
 
-const mimeFor = (url: string) => {
-  if (url.endsWith(".mp3")) return "audio/mpeg";
-  if (url.endsWith(".wav")) return "audio/wav";
-  if (url.endsWith(".ogg")) return "audio/ogg";
-  return "audio/mpeg";
-};
+
 
 // List your audio snippets here (title + Drive file ID)
 const AUDIO_SNIPPETS = [
@@ -676,6 +672,55 @@ export default function PortfolioGame() {
 
   const zoneData = ZONES.find(z => z.id === activeZone);
 
+  // Small inline AudioPlayer using the useAudio hook.
+  function AudioPlayer({ src }: { src: string }) {
+    const { isPlaying, toggle, levels, error } = useAudio(src);
+    const cvsRef = useRef<HTMLCanvasElement | null>(null);
+
+    // draw the analyser levels (simple bar meter)
+    useEffect(() => {
+      const cvs = cvsRef.current;
+      if (!cvs) return;
+      const ctx = cvs.getContext("2d");
+      if (!ctx) return;
+
+      const draw = () => {
+        if (!levels) {
+          ctx.clearRect(0, 0, cvs.width, cvs.height);
+          return;
+        }
+        const w = cvs.width;
+        const h = cvs.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "#94A3B8"; // slate
+        const barW = Math.max(1, w / levels.length);
+        for (let i = 0; i < levels.length; i++) {
+          const v = levels[i] / 255;
+          const bh = v * h;
+          ctx.fillRect(i * barW, h - bh, barW - 1, bh);
+        }
+      };
+      draw();
+    }, [levels]);
+
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={(e) => { e.stopPropagation(); toggle(); }}
+            className="rounded bg-white/10 px-3 py-1 text-sm"
+            aria-pressed={isPlaying}
+          >
+            {isPlaying ? "Pause" : "Play"}
+          </button>
+          <div className="text-xs opacity-80">Preview</div>
+        </div>
+        <canvas ref={cvsRef} width={220} height={36} className="w-full rounded-md bg-white/3" />
+        {error && <div className="text-xs text-red-400">{error}</div>}
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-screen bg-slate-900 text-white">
       {/* Fullscreen canvas layer */}
@@ -949,10 +994,7 @@ export default function PortfolioGame() {
                                 Open
                               </a>
                             </div>
-                            <audio controls preload="none" className="w-full" crossOrigin="anonymous">
-                              <source src={src} type={mimeFor(src)} />
-                              Your browser does not support the audio element.
-                            </audio>
+                            <AudioPlayer src={src} />
                           </li>
                         );
                       })}
