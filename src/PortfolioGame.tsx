@@ -26,6 +26,16 @@ const ZONES = [
   { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
 ];
 
+// Particle
+type Particle = {
+  x: number;
+  y: number;
+  size: number;
+  alpha: number;
+  dx: number;
+  dy: number;
+};
+
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -136,7 +146,7 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
             className="h-full bg-gradient-to-r from-white/40 to-white/50 transition-all ease-out"
             style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }}
           />
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full scale-0 group-hover:scale-100 transition-transform" />
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full scale-0 group-hover:scale-100 transition-transform" />
         </div>
       </div>
       <canvas ref={cvsRef} width={220} style={{ height: '36px' }} className="w-full rounded-md bg-white/3" />
@@ -311,6 +321,9 @@ export default function PortfolioGame() {
   const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 0.75 });
   const [activeZone, setActiveZone] = useState<string | null>(null);
 
+  // Particle state
+  const [particles, setParticles] = useState<Particle[]>([]);
+
   // Which zone (if any) the player is overlapping this frame:
   const overlapRef = useRef<string | null>(null);
   // Minimap toggle
@@ -327,6 +340,8 @@ export default function PortfolioGame() {
   const [viewport, setViewport] = useState(
     typeof window !== "undefined" ? computeViewport() : { width: 1024, height: 576 }
   );
+
+  // (Removed unused cameraTarget state after refactor)
 
   useEffect(() => {
     let raf = 0;
@@ -522,24 +537,40 @@ export default function PortfolioGame() {
       // Camera target = keep player slightly off-center (soft bounds) + smooth lerp
       const marginX = viewport.width * 0.3;
       const marginY = viewport.height * 0.3;
-      const targetX = next.x + next.w / 2;
-      const targetY = next.y + next.h / 2;
+      const playerCenterX = next.x + next.w / 2;
+      const playerCenterY = next.y + next.h / 2;
 
+      // Base desired position (following player)
       let desiredX = camera.x;
       let desiredY = camera.y;
 
-      if (targetX - camera.x < marginX) desiredX = Math.max(0, targetX - marginX);
-      if (targetX - camera.x > viewport.width - marginX)
-        desiredX = Math.min(WORLD.width - viewport.width, targetX - (viewport.width - marginX));
-      if (targetY - camera.y < marginY) desiredY = Math.max(0, targetY - marginY);
-      if (targetY - camera.y > viewport.height - marginY)
-        desiredY = Math.min(WORLD.height - viewport.height, targetY - (viewport.height - marginY));
+      if (playerCenterX - camera.x < marginX) desiredX = Math.max(0, playerCenterX - marginX);
+      if (playerCenterX - camera.x > viewport.width - marginX)
+        desiredX = Math.min(WORLD.width - viewport.width, playerCenterX - (viewport.width - marginX));
+      if (playerCenterY - camera.y < marginY) desiredY = Math.max(0, playerCenterY - marginY);
+      if (playerCenterY - camera.y > viewport.height - marginY)
+        desiredY = Math.min(WORLD.height - viewport.height, playerCenterY - (viewport.height - marginY));
 
-      // Smoothly approach desired position
+      // If in a zone, smoothly move camera to focus on zone
+      const activeZoneObj = ZONES.find(z => z.id === activeZone);
+      if (activeZoneObj) {
+        const zoneCenter = {
+          x: activeZoneObj.rect.x + activeZoneObj.rect.w / 2,
+          y: activeZoneObj.rect.y + activeZoneObj.rect.h / 2
+        };
+
+        // Center the zone with some offset
+        desiredX = Math.max(0, Math.min(WORLD.width - viewport.width,
+          zoneCenter.x - viewport.width / 2));
+        desiredY = Math.max(0, Math.min(WORLD.height - viewport.height,
+          zoneCenter.y - viewport.height / 2));
+      }
+
+      // Smoothly approach desired position (adjust these values to change transition speed)
       const cam = {
-        x: lerp(camera.x, desiredX, 0.12),
-        y: lerp(camera.y, desiredY, 0.12),
-        zoom: camera.zoom,
+        x: lerp(camera.x, desiredX, activeZone ? 0.05 : 0.12), // Slower transition when entering zones
+        y: lerp(camera.y, desiredY, activeZone ? 0.05 : 0.12),
+        zoom: lerp(camera.zoom, activeZone ? 0.9 : 0.75, 0.08) // Subtle zoom effect
       };
 
       // Save lightweight state
@@ -606,6 +637,56 @@ export default function PortfolioGame() {
             }
           }
         }
+
+        // Update and draw particles
+        setParticles(prevParticles => {
+          const updated = prevParticles
+            .map(p => ({
+              ...p,
+              x: p.x + p.dx,
+              y: p.y + p.dy,
+              size: p.size * 0.95,
+              alpha: p.alpha * 0.95
+            }))
+            .filter(p => p.size > 0.5 && p.alpha > 0.1);
+
+          // Add new particles if moving
+          if (ix !== 0 || iy !== 0) {
+            const centerX = next.x + next.w / 2;
+            const centerY = next.y + next.h / 2;
+            const spread = 2;
+
+            // Add 2 new particles
+            updated.push(
+              {
+                x: centerX + (Math.random() - 0.5) * spread,
+                y: centerY + (Math.random() - 0.5) * spread,
+                size: 6 + Math.random() * 4,
+                alpha: 0.6,
+                dx: (Math.random() - 0.5) * 0.5,
+                dy: (Math.random() - 0.5) * 0.5
+              },
+              {
+                x: centerX + (Math.random() - 0.5) * spread,
+                y: centerY + (Math.random() - 0.5) * spread,
+                size: 4 + Math.random() * 4,
+                alpha: 0.4,
+                dx: (Math.random() - 0.5) * 0.5,
+                dy: (Math.random() - 0.5) * 0.5
+              }
+            );
+          }
+
+          return updated.slice(-40); // Keep max 40 particles
+        });
+
+        // Draw particles
+        particles.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(167, 139, 250, ${p.alpha})`;
+          ctx.fill();
+        });
 
         // Player
         ctx.fillStyle = "#A78BFA";
@@ -885,246 +966,266 @@ export default function PortfolioGame() {
       </div>
 
 
-      {zoneData && (
-        <div role="dialog" aria-modal="true" aria-labelledby="zone-title"
-          className="fixed inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden pointer-events-auto"
-          style={{ zIndex: 99999 }}
-          onClick={() => closeZone()}>
-          <div
-            className="max-w-4xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col max-h-[min(85vh,800px)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Sticky header */}
-            <div className="sticky top-0 z-10 px-6 py-4 bg-slate-900/95 backdrop-blur rounded-t-2xl border-b border-white/10">
-              <h2 className="text-2xl font-semibold">{zoneData.label}</h2>
-              <button
-                onClick={() => setActiveZone(null)}
-                className="absolute right-4 top-3 rounded-full px-3 py-1 bg-white/10 hover:bg-white/20"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
+      <div
+        role={zoneData ? "dialog" : undefined}
+        aria-modal={zoneData ? "true" : undefined}
+        aria-labelledby="zone-title"
+        className={`fixed inset-0 z-20 flex items-center justify-center p-4 transition-all duration-500 ease-in-out ${zoneData
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
+          }`}
+        style={{ zIndex: 99999 }}
+        onClick={() => { if (zoneData) closeZone(); }}
+      >
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 transition-all duration-500 ${zoneData ? "bg-black/60 backdrop-blur-sm" : "bg-black/0 backdrop-blur-none"
+            }`}
+          aria-hidden="true"
+        />
 
-            {/* Scrollable body */}
-            <div className="px-6 pb-6 pt-2 overflow-y-auto min-h-0 max-h-[calc(min(85vh,800px)-64px)]">
-              <p className="opacity-90 leading-relaxed">{zoneData.blurb}</p>
+        {/* Content */}
+        <div
+          className={`max-w-4xl w-full bg-slate-900 rounded-2xl ring-1 ring-white/10 shadow-2xl relative flex flex-col min-h-0 transition-all duration-500 ease-out ${zoneData
+              ? "opacity-100 translate-y-0 scale-100"
+              : "opacity-0 translate-y-8 scale-95"
+            }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {zoneData && (
+            <>
+              {/* Sticky header */}
+              <div className="sticky top-0 z-10 px-6 py-4 bg-slate-900/95 backdrop-blur rounded-t-2xl border-b border-white/10">
+                <h2 id="zone-title" className="text-2xl font-semibold">{zoneData.label}</h2>
+                <button
+                  onClick={() => setActiveZone(null)}
+                  className="absolute right-4 top-3 rounded-full px-3 py-1 bg-white/10 hover:bg-white/20"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
 
-              {zoneData.id === "about" && (
-                <div className="mt-3 grid md:grid-cols-[160px,1fr] gap-6 items-start">
-                  {/* Left: photo (replace src) */}
-                  {/* If you don’t have a photo yet, keep the placeholder div below instead */}
-                  {/* <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" /> */}
-                  {/* <div className="aspect-square rounded-xl bg-white/5" /> */}
-                  <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" />
+              {/* Scrollable body */}
+              <div className="px-6 pb-6 pt-2 overflow-y-auto min-h-0 max-h-[calc(min(85vh,800px)-64px)]">
+                <p className="opacity-90 leading-relaxed">{zoneData.blurb}</p>
 
-                  {/* Right: bio + links */}
-                  <div className="space-y-3">
-                    <p>
-                      I’m David, a UBC student building real-time audio tools (pitch-shifting, pYIN/librosa),
-                      playful JS/React experiences, and performance-minded web apps. I like shipping scrappy
-                      MVPs fast, then polishing the UX.
-                    </p>
-                    <ul className="list-disc list-inside opacity-90">
-                      <li>Current: interactive portfolio game (this site!)</li>
-                      <li>Ongoing: Melodyne-style plugin for Ableton</li>
-                      <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
-                    </ul>
-                    <div className="flex flex-wrap gap-3 pt-1">
-                      <a className="underline" href="/resume.pdf" target="_blank" rel="noreferrer">Résumé</a>
-                      <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
-                      <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
-                      <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
-                    </div>
-                  </div>
-                </div>
-              )}
+                {zoneData.id === "about" && (
+                  <div className="mt-3 grid md:grid-cols-[160px,1fr] gap-6 items-start">
+                    {/* Left: photo (replace src) */}
+                    {/* If you don’t have a photo yet, keep the placeholder div below instead */}
+                    {/* <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" /> */}
+                    {/* <div className="aspect-square rounded-xl bg-white/5" /> */}
+                    <img src="/headshot.jpg" alt="David Ting" className="aspect-square object-cover rounded-xl" />
 
-              {zoneData.id === "projects" && (
-                <div className="mt-3 grid md:grid-cols-[160px,1fr] gap-6 items-start">
-                  <div className="space-y-3">
-                    <p>
-                      Uhm... this is awkward. You found the projects section, but I haven’t added any projects yet!
-                      Feel free to check back later, or reach out via email or LinkedIn to see what I’m working on.
-                    </p>
-
-                    <ul className="list-disc list-inside opacity-90">
-                      <li>Current: interactive portfolio game (this site!)</li>
-                      <li>Ongoing: Melodyne-style plugin for Ableton</li>
-                      <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
-                    </ul>
-
-                    <div className="flex flex-wrap gap-3 pt-1">
-                      <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
-                      <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
-                      <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {zoneData.id === "music" && (
-                <div className="mt-6 space-y-4">
-                  <p className="opacity-90">
-                    Since I was a kid, I’ve loved making music. In my free time I love to
-                    produce with friends using Ableton Live. I’m fascinated by audio tech and
-                    signal processing, which is why I’m building a pitch-correction plugin as a side project.
-                  </p>
-
-                  <p className="opacity-90">
-                    Below are some demos of my own music productions over the years:
-                  </p>
-
-                  {/* YouTube embed (responsive 16:9) */}
-                  <div className="mb-4">
-                    <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
-                      <iframe
-                        src="https://www.youtube.com/embed/Px3x7RFv3QU"
-                        title="DNA - BTS remake"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Fallback link */}
-                  <a
-                    className="underline opacity-80 hover:opacity-100"
-                    href="https://www.youtube.com/playlist?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB&index=2"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open playlist on YouTube
-                  </a>
-
-                  {/* Responsive YouTube playlist embed */}
-                  <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
-                    <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
-                      <iframe
-                        src="https://www.youtube-nocookie.com/embed/videoseries?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB"
-                        title="David Ting — YouTube Playlist"
-                        loading="lazy"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        allowFullScreen
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          border: 0,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Fallback link */}
-                  <a
-                    className="underline opacity-80 hover:opacity-100"
-                    href="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/view?usp=sharing"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open video on Google Drive
-                  </a>
-
-                  {/* Google Drive video embed */}
-                  <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
-                    <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
-                      <iframe
-                        src="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/preview"
-                        title="Music demo — Google Drive"
-                        loading="lazy"
-                        allow="autoplay"
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          border: 0,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Audio snippet list */}
-                  <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
-
-                    {/* Scrollable list with simple prev/next controls */}
-                    <div className="flex items-center gap-3 mb-2">
-                      <button
-                        type="button"
-                        className="rounded bg-white/6 px-2 py-1 text-sm"
-                        onClick={() => {
-                          // focus first
-                          const first = itemRefs.current[AUDIO_SNIPPETS[0].id];
-                          first?.focus();
-                        }}
-                      >
-                        First
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded bg-white/6 px-2 py-1 text-sm"
-                        onClick={() => {
-                          // focus last
-                          const last = itemRefs.current[AUDIO_SNIPPETS[AUDIO_SNIPPETS.length - 1].id];
-                          last?.focus();
-                        }}
-                      >
-                        Last
-                      </button>
-                      <div className="text-xs opacity-80">Use Tab / Shift+Tab to navigate, Enter to toggle play.</div>
-                    </div>
-
-                    <div className="space-y-3 pr-2">
-                      <ul className="space-y-3">
-                        {AUDIO_SNIPPETS.map((a, idx) => {
-                          const src = a.url ?? driveDl(a.id);
-                          return (
-                            <li
-                              key={a.id}
-                              ref={(el) => { itemRefs.current[a.id] = el; }}
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  // find a button inside and click it
-                                  const btn = (e.currentTarget as HTMLElement).querySelector("button");
-                                  if (btn) {
-                                    (btn as HTMLButtonElement).click();
-                                  }
-                                }
-                                if (e.key === "ArrowDown") {
-                                  const next = AUDIO_SNIPPETS[Math.min(AUDIO_SNIPPETS.length - 1, idx + 1)];
-                                  itemRefs.current[next.id]?.focus();
-                                }
-                                if (e.key === "ArrowUp") {
-                                  const prev = AUDIO_SNIPPETS[Math.max(0, idx - 1)];
-                                  itemRefs.current[prev.id]?.focus();
-                                }
-                              }}
-                              className="space-y-1 outline-none focus:ring-2 focus:ring-white/20 rounded-md p-2"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="font-medium">{a.title}</div>
-                                <a href={src} target="_blank" rel="noreferrer" className="text-xs opacity-80 underline">Open</a>
-                              </div>
-                              <AudioPlayer src={src} />
-                            </li>
-                          );
-                        })}
+                    {/* Right: bio + links */}
+                    <div className="space-y-3">
+                      <p>
+                        I’m David, a UBC student building real-time audio tools (pitch-shifting, pYIN/librosa),
+                        playful JS/React experiences, and performance-minded web apps. I like shipping scrappy
+                        MVPs fast, then polishing the UX.
+                      </p>
+                      <ul className="list-disc list-inside opacity-90">
+                        <li>Current: interactive portfolio game (this site!)</li>
+                        <li>Ongoing: Melodyne-style plugin for Ableton</li>
+                        <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
                       </ul>
+                      <div className="flex flex-wrap gap-3 pt-1">
+                        <a className="underline" href="/resume.pdf" target="_blank" rel="noreferrer">Résumé</a>
+                        <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
+                        <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
+                        <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
+                )}
+
+                {zoneData.id === "projects" && (
+                  <div className="mt-3 grid md:grid-cols-[160px,1fr] gap-6 items-start">
+                    <div className="space-y-3">
+                      <p>
+                        Uhm... this is awkward. You found the projects section, but I haven’t added any projects yet!
+                        Feel free to check back later, or reach out via email or LinkedIn to see what I’m working on.
+                      </p>
+
+                      <ul className="list-disc list-inside opacity-90">
+                        <li>Current: interactive portfolio game (this site!)</li>
+                        <li>Ongoing: Melodyne-style plugin for Ableton</li>
+                        <li>Also: NBAchat (WebSockets), Spotify recs app (React/Node)</li>
+                      </ul>
+
+                      <div className="flex flex-wrap gap-3 pt-1">
+                        <a className="underline" href="mailto:dting01@student.ubc.ca">Email</a>
+                        <a className="underline" href="https://github.com/dlt87" target="_blank" rel="noreferrer">GitHub</a>
+                        <a className="underline" href="https://www.linkedin.com/in/davidting1/" target="_blank" rel="noreferrer">LinkedIn</a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {zoneData.id === "music" && (
+                  <div className="mt-6 space-y-4">
+                    <p className="opacity-90">
+                      Since I was a kid, I’ve loved making music. In my free time I love to
+                      produce with friends using Ableton Live. I’m fascinated by audio tech and
+                      signal processing, which is why I’m building a pitch-correction plugin as a side project.
+                    </p>
+
+                    <p className="opacity-90">
+                      Below are some demos of my own music productions over the years:
+                    </p>
+
+                    {/* YouTube embed (responsive 16:9) */}
+                    <div className="mb-4">
+                      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+                        <iframe
+                          src="https://www.youtube.com/embed/Px3x7RFv3QU"
+                          title="DNA - BTS remake"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Fallback link */}
+                    <a
+                      className="underline opacity-80 hover:opacity-100"
+                      href="https://www.youtube.com/playlist?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB&index=2"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open playlist on YouTube
+                    </a>
+
+                    {/* Responsive YouTube playlist embed */}
+                    <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
+                      <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
+                        <iframe
+                          src="https://www.youtube-nocookie.com/embed/videoseries?list=PLHUXvDXP_PIHpIIdL3MZiEWjvS_JRxEJB"
+                          title="David Ting — YouTube Playlist"
+                          loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          allowFullScreen
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            border: 0,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Fallback link */}
+                    <a
+                      className="underline opacity-80 hover:opacity-100"
+                      href="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/view?usp=sharing"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open video on Google Drive
+                    </a>
+
+                    {/* Google Drive video embed */}
+                    <div className="rounded-xl ring-1 ring-white/10 overflow-hidden bg-white/5">
+                      <div style={{ position: "relative", paddingTop: "56.25%" /* 16:9 */ }}>
+                        <iframe
+                          src="https://drive.google.com/file/d/1kpqR3N1diPjQYoEa8c_eWq8E6Pt9ivV2/preview"
+                          title="Music demo — Google Drive"
+                          loading="lazy"
+                          allow="autoplay"
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            border: 0,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Audio snippet list */}
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-2">Random Snippets</h3>
+
+                      {/* Scrollable list with simple prev/next controls */}
+                      <div className="flex items-center gap-3 mb-2">
+                        <button
+                          type="button"
+                          className="rounded bg-white/6 px-2 py-1 text-sm"
+                          onClick={() => {
+                            // focus first
+                            const first = itemRefs.current[AUDIO_SNIPPETS[0].id];
+                            first?.focus();
+                          }}
+                        >
+                          First
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded bg-white/6 px-2 py-1 text-sm"
+                          onClick={() => {
+                            // focus last
+                            const last = itemRefs.current[AUDIO_SNIPPETS[AUDIO_SNIPPETS.length - 1].id];
+                            last?.focus();
+                          }}
+                        >
+                          Last
+                        </button>
+                        <div className="text-xs opacity-80">Use Tab / Shift+Tab to navigate, Enter to toggle play.</div>
+                      </div>
+
+                      <div className="space-y-3 pr-2">
+                        <ul className="space-y-3">
+                          {AUDIO_SNIPPETS.map((a, idx) => {
+                            const src = a.url ?? driveDl(a.id);
+                            return (
+                              <li
+                                key={a.id}
+                                ref={(el) => { itemRefs.current[a.id] = el; }}
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    // find a button inside and click it
+                                    const btn = (e.currentTarget as HTMLElement).querySelector("button");
+                                    if (btn) {
+                                      (btn as HTMLButtonElement).click();
+                                    }
+                                  }
+                                  if (e.key === "ArrowDown") {
+                                    const next = AUDIO_SNIPPETS[Math.min(AUDIO_SNIPPETS.length - 1, idx + 1)];
+                                    itemRefs.current[next.id]?.focus();
+                                  }
+                                  if (e.key === "ArrowUp") {
+                                    const prev = AUDIO_SNIPPETS[Math.max(0, idx - 1)];
+                                    itemRefs.current[prev.id]?.focus();
+                                  }
+                                }}
+                                className="space-y-1 outline-none focus:ring-2 focus:ring-white/20 rounded-md p-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="font-medium">{a.title}</div>
+                                  <a href={src} target="_blank" rel="noreferrer" className="text-xs opacity-80 underline">Open</a>
+                                </div>
+                                <AudioPlayer src={src} />
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Helper chip */}
       <div className="fixed left-4 bottom-4 z-20 rounded-full bg-black/60 backdrop-blur px-4 py-2 text-sm ring-1 ring-white/10">
