@@ -23,6 +23,7 @@ const ZONES = [
   { id: "about", label: "About Me", color: "#6EE7B7", rect: { x: 180, y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps." },
   { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
   { id: "music", label: "Music", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "" },
+  { id: "bulletin", label: "Bulletin Board", color: "#FB923C", rect: { x: 800, y: 160, w: 340, h: 200 }, blurb: "Take a selfie and post it on the digital bulletin board!" },
   { id: "loafing", label: "Loafing", color: "#C084FC", rect: { x: 860, y: 860, w: 300, h: 200 }, blurb: "A cozy corner to chill, sip some tea, and loaf around." },
   { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
 ];
@@ -157,6 +158,246 @@ const AudioPlayerInner = ({ src }: { src: string }) => {
 };
 
 export const AudioPlayer = memo(AudioPlayerInner);
+
+// --- Bulletin Board Component ---
+type BulletinPost = {
+  id: string;
+  image: string; // base64
+  message?: string;
+  timestamp: number;
+};
+
+const BulletinBoard = () => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [posts, setPosts] = useState<BulletinPost[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load posts from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("bulletin-posts");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setPosts(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      console.warn("Failed to load bulletin posts", e);
+    }
+  }, []);
+
+  // Save posts to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem("bulletin-posts", JSON.stringify(posts));
+    } catch (e) {
+      console.warn("Failed to save bulletin posts", e);
+    }
+  }, [posts]);
+
+  const startCamera = async () => {
+    try {
+      setError(null);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "user" },
+        audio: false,
+      });
+      setStream(mediaStream);
+      setIsCameraOn(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (err) {
+      setError("Camera access denied or not available");
+      console.error("Camera error:", err);
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setIsCameraOn(false);
+    setCapturedImage(null);
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Set canvas size to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw current video frame
+    ctx.drawImage(video, 0, 0);
+
+    // Get base64 image
+    const imageData = canvas.toDataURL("image/jpeg", 0.8);
+    setCapturedImage(imageData);
+  };
+
+  const postToBoard = () => {
+    if (!capturedImage) return;
+
+    const newPost: BulletinPost = {
+      id: Date.now().toString(),
+      image: capturedImage,
+      message: message.trim(),
+      timestamp: Date.now(),
+    };
+
+    setPosts(prev => [newPost, ...prev]);
+    setCapturedImage(null);
+    setMessage("");
+    stopCamera();
+  };
+
+  const deletePost = (id: string) => {
+    setPosts(prev => prev.filter(p => p.id !== id));
+  };
+
+  return (
+    <div className="mt-6 space-y-6">
+      <p className="opacity-90">
+        Take a selfie and post it on the bulletin board! Your photo will be saved locally in your browser.
+      </p>
+
+      {/* Camera Interface */}
+      <div className="rounded-xl ring-1 ring-white/10 p-4 bg-white/5 space-y-4">
+        {error && (
+          <div className="text-sm text-red-400 bg-red-500/10 rounded p-3">
+            {error}
+          </div>
+        )}
+
+        {!isCameraOn && !capturedImage && (
+          <button
+            onClick={startCamera}
+            className="w-full rounded bg-orange-500/20 hover:bg-orange-500/30 px-4 py-3 font-semibold transition-colors ring-1 ring-orange-500/40"
+          >
+            📸 Turn On Camera
+          </button>
+        )}
+
+        {isCameraOn && !capturedImage && (
+          <div className="space-y-3">
+            <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={capturePhoto}
+                className="flex-1 rounded bg-orange-500/20 hover:bg-orange-500/30 px-4 py-2 font-semibold transition-colors ring-1 ring-orange-500/40"
+              >
+                📷 Capture
+              </button>
+              <button
+                onClick={stopCamera}
+                className="rounded bg-white/10 hover:bg-white/20 px-4 py-2 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {capturedImage && (
+          <div className="space-y-3">
+            <div className="rounded-lg overflow-hidden bg-black">
+              <img src={capturedImage} alt="Captured" className="w-full" />
+            </div>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Add an optional message..."
+              maxLength={200}
+              rows={3}
+              className="w-full rounded bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={postToBoard}
+                className="flex-1 rounded bg-orange-500/20 hover:bg-orange-500/30 px-4 py-2 font-semibold transition-colors ring-1 ring-orange-500/40"
+              >
+                📌 Post to Board
+              </button>
+              <button
+                onClick={() => setCapturedImage(null)}
+                className="rounded bg-white/10 hover:bg-white/20 px-4 py-2 transition-colors"
+              >
+                Retake
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bulletin Board Display */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">
+          Bulletin Board ({posts.length})
+        </h3>
+
+        {posts.length === 0 ? (
+          <div className="text-center py-12 opacity-60 text-sm">
+            No posts yet. Be the first to post a selfie!
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                className="relative group rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10"
+              >
+                <img
+                  src={post.image}
+                  alt="Bulletin post"
+                  className="w-full aspect-square object-cover"
+                />
+                {post.message && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/70 backdrop-blur-sm p-2">
+                    <p className="text-xs line-clamp-2">{post.message}</p>
+                  </div>
+                )}
+                <button
+                  onClick={() => deletePost(post.id)}
+                  className="absolute top-2 right-2 rounded-full bg-red-500/80 hover:bg-red-500 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Delete post"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <div className="absolute bottom-2 left-2 text-xs opacity-60">
+                  {new Date(post.timestamp).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Hidden canvas for capturing */}
+      <canvas ref={canvasRef} className="hidden" />
+    </div>
+  );
+};
 
 // Build a direct (streamable) URL from a Google Drive file ID
 const driveDl = (id: string) => `https://drive.google.com/uc?export=view&id=${id}`;
@@ -1301,6 +1542,10 @@ export default function PortfolioGame() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {zoneData.id === "bulletin" && (
+                  <BulletinBoard />
                 )}
 
                 {zoneData.id === "loafing" && (
