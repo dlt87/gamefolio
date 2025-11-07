@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, memo } from "react";
 import { useAudio } from "./audio/useAudio";
+import { db, storage } from "./firebase/config";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, limit } from "firebase/firestore";
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
 
 // --- Tweakable gameplay constants ---
 const WORLD = { width: 2000, height: 1200 };
@@ -162,7 +165,7 @@ export const AudioPlayer = memo(AudioPlayerInner);
 // --- Bulletin Board Component ---
 type BulletinPost = {
   id: string;
-  image: string; // base64
+  imageUrl: string; // Firebase Storage URL
   message?: string;
   timestamp: number;
 };
@@ -176,28 +179,29 @@ const BulletinBoard = () => {
   const [message, setMessage] = useState("");
   const [posts, setPosts] = useState<BulletinPost[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  // Load posts from localStorage on mount
+  // Subscribe to real-time posts from Firestore
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("bulletin-posts");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setPosts(Array.isArray(parsed) ? parsed : []);
+    const postsCollection = collection(db, "bulletin-posts");
+    const q = query(postsCollection, orderBy("timestamp", "desc"), limit(50));
+    
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const postsData: BulletinPost[] = [];
+        snapshot.forEach((doc) => {
+          postsData.push({ id: doc.id, ...doc.data() } as BulletinPost);
+        });
+        setPosts(postsData);
+      },
+      (err) => {
+        console.error("Error fetching posts:", err);
+        setError("Failed to load posts from server");
       }
-    } catch (e) {
-      console.warn("Failed to load bulletin posts", e);
-    }
-  }, []);
+    );
 
-  // Save posts to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem("bulletin-posts", JSON.stringify(posts));
-    } catch (e) {
-      console.warn("Failed to save bulletin posts", e);
-    }
-  }, [posts]);
+    return () => unsubscribe();
+  }, []);
 
   // Attach stream to video element when camera turns on
   useEffect(() => {
@@ -253,30 +257,56 @@ const BulletinBoard = () => {
     setCapturedImage(imageData);
   };
 
-  const postToBoard = () => {
+  const postToBoard = async () => {
     if (!capturedImage) return;
 
-    const newPost: BulletinPost = {
-      id: Date.now().toString(),
-      image: capturedImage,
-      message: message.trim(),
-      timestamp: Date.now(),
-    };
+    setIsUploading(true);
+    setError(null);
 
-    setPosts(prev => [newPost, ...prev]);
-    setCapturedImage(null);
-    setMessage("");
-    stopCamera();
+    try {
+      // Upload image to Firebase Storage
+      const timestamp = Date.now();
+      const imageRef = ref(storage, `bulletin-posts/${timestamp}.jpg`);
+      
+      await uploadString(imageRef, capturedImage, "data_url");
+      const imageUrl = await getDownloadURL(imageRef);
+
+      // Save post to Firestore
+      await addDoc(collection(db, "bulletin-posts"), {
+        imageUrl,
+        message: message.trim() || null,
+        timestamp,
+      });
+
+      // Reset form
+      setCapturedImage(null);
+      setMessage("");
+      stopCamera();
+    } catch (err) {
+      console.error("Error posting to board:", err);
+      setError("Failed to upload photo. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const deletePost = (id: string) => {
-    setPosts(prev => prev.filter(p => p.id !== id));
+  const deletePost = async (id: string) => {
+    try {
+      // Delete from Firestore
+      await deleteDoc(doc(db, "bulletin-posts", id));
+      
+      // Note: We're not deleting from Storage to keep it simple
+      // In production, you'd want to delete the image file too
+    } catch (err) {
+      console.error("Error deleting post:", err);
+      setError("Failed to delete post");
+    }
   };
 
   return (
     <div className="mt-6 space-y-6">
       <p className="opacity-90">
-        Your photo will be saved locally in your browser.
+        Take a selfie and post it on the global bulletin board! Everyone can see your photo.
       </p>
 
       {/* Camera Interface */}
@@ -340,13 +370,15 @@ const BulletinBoard = () => {
             <div className="flex gap-3">
               <button
                 onClick={postToBoard}
-                className="flex-1 rounded bg-orange-500/20 hover:bg-orange-500/30 px-4 py-2 font-semibold transition-colors ring-1 ring-orange-500/40"
+                disabled={isUploading}
+                className="flex-1 rounded bg-orange-500/20 hover:bg-orange-500/30 px-4 py-2 font-semibold transition-colors ring-1 ring-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                📌 Post to Board
+                {isUploading ? "📤 Uploading..." : "📌 Post to Board"}
               </button>
               <button
                 onClick={() => setCapturedImage(null)}
-                className="rounded bg-white/10 hover:bg-white/20 px-4 py-2 transition-colors"
+                disabled={isUploading}
+                className="rounded bg-white/10 hover:bg-white/20 px-4 py-2 transition-colors disabled:opacity-50"
               >
                 Retake
               </button>
@@ -373,7 +405,7 @@ const BulletinBoard = () => {
                 className="relative group rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10"
               >
                 <img
-                  src={post.image}
+                  src={post.imageUrl}
                   alt="Bulletin post"
                   className="w-full aspect-square object-cover"
                 />
