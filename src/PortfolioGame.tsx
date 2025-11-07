@@ -11,7 +11,7 @@ const PADDING = 48; // min breathing room around the window
 const NAV_H = 56;        // height of your fixed header (px)
 const FOOTER_H = 28;     // bottom breathing room
 const EXTRA_GAP = 12;    // extra safety gap
-const MAX_VIEW = { width: 1280, height: 720 }; // <= make the game box smaller (16:9)
+const MAX_VIEW = { width: 1920, height: 1080 }; // <= make the game box smaller (16:9)
 const MINIMAP_MIN_WIDTH = 640; // hide minimap on narrow/mobile viewports
 
 // Tiles
@@ -23,6 +23,7 @@ const ZONES = [
   { id: "about", label: "About Me", color: "#6EE7B7", rect: { x: 180, y: 160, w: 260, h: 180 }, blurb: "Hi! I'm David, a UBC student building real-time audio tools and playful web apps." },
   { id: "projects", label: "Projects", color: "#93C5FD", rect: { x: 1500, y: 160, w: 320, h: 220 }, blurb: "Featured projects..." },
   { id: "music", label: "Music", color: "#FDE68A", rect: { x: 180, y: 800, w: 300, h: 200 }, blurb: "" },
+  { id: "loafing", label: "Loafing", color: "#C084FC", rect: { x: 860, y: 860, w: 300, h: 200 }, blurb: "A cozy corner to chill, sip some tea, and loaf around." },
   { id: "contact", label: "Contact", color: "#FCA5A5", rect: { x: 1500, y: 820, w: 280, h: 180 }, blurb: "Email form..." },
 ];
 
@@ -337,18 +338,6 @@ export default function PortfolioGame() {
   // Touch joystick state
   const touchRef = useRef<{ id: number | null, startX: number, startY: number, dx: number, dy: number }>({ id: null, startX: 0, startY: 0, dx: 0, dy: 0 });
   const [stamina, setStamina] = useState(1); // 0..1
-
-  // Touch UI (joystick/buttons) visibility
-  const isTouchDevice = () => {
-    if (typeof window === 'undefined') return false;
-    return ('ontouchstart' in window) || (navigator as any).maxTouchPoints > 0;
-  };
-  const [showTouchUI, setShowTouchUI] = useState(() => (typeof window !== 'undefined') && (isTouchDevice() || window.innerWidth < 900));
-  useEffect(() => {
-    const onResize = () => setShowTouchUI(isTouchDevice() || window.innerWidth < 900);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   // Viewport state
   const [viewport, setViewport] = useState(
@@ -806,8 +795,8 @@ export default function PortfolioGame() {
 
         // ctx.restore();
 
-        // Joystick UI (screen space) - only draw from canvas when no overlay touch UI
-        if (touchRef.current.id !== null && !showTouchUI) {
+        // Joystick UI (screen space)
+        if (touchRef.current.id !== null) {
           const r = 34;
           const cx = touchRef.current.startX;
           const cy = touchRef.current.startY;
@@ -987,69 +976,6 @@ export default function PortfolioGame() {
               }
             }}
           />
-          {/* Touch overlay controls (mobile) */}
-          {showTouchUI && (
-            <>
-              {/* Joystick (bottom-left) */}
-              <div
-                role="slider"
-                aria-label="Virtual joystick"
-                className="absolute left-4 bottom-4 w-28 h-28 rounded-full bg-white/5 backdrop-blur ring-1 ring-white/10 select-none touch-none"
-                onPointerDown={(e) => {
-                  const cvs = canvasRef.current; if (!cvs) return;
-                  const joy = e.currentTarget as HTMLDivElement;
-                  const joyRect = joy.getBoundingClientRect();
-                  const centerClientX = joyRect.left + joyRect.width / 2;
-                  const centerClientY = joyRect.top + joyRect.height / 2;
-                  const canvasRect = cvs.getBoundingClientRect();
-                  const startX = centerClientX - canvasRect.left;
-                  const startY = centerClientY - canvasRect.top;
-                  (joy as Element).setPointerCapture(e.pointerId);
-                  touchRef.current = { id: e.pointerId, startX, startY, dx: 0, dy: 0 };
-                }}
-                onPointerMove={(e) => {
-                  if (touchRef.current.id !== e.pointerId) return;
-                  const joy = e.currentTarget as HTMLDivElement;
-                  const joyRect = joy.getBoundingClientRect();
-                  const cx = joyRect.left + joyRect.width / 2;
-                  const cy = joyRect.top + joyRect.height / 2;
-                  const R = Math.min(joyRect.width, joyRect.height) * 0.45;
-                  let dx = e.clientX - cx;
-                  let dy = e.clientY - cy;
-                  const m = Math.hypot(dx, dy) || 1;
-                  if (m > R) { dx = (dx / m) * R; dy = (dy / m) * R; }
-                  touchRef.current.dx = dx;
-                  touchRef.current.dy = dy;
-                }}
-                onPointerUp={(e) => {
-                  if (touchRef.current.id === e.pointerId) {
-                    touchRef.current = { id: null, startX: 0, startY: 0, dx: 0, dy: 0 };
-                  }
-                }}
-              >
-                {/* Knob visual follows dx/dy via CSS transform using inline style would require state; keep base pad only; the canvas HUD shows knob when active */}
-                <div className="absolute inset-[22%] rounded-full bg-white/10" />
-              </div>
-
-              {/* Action buttons (bottom-right) */}
-              <div className="absolute right-4 bottom-4 flex gap-3">
-                <button
-                  className="w-14 h-14 rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur text-sm"
-                  onPointerDown={() => setKeys(prev => ({ ...prev, shift: true }))}
-                  onPointerUp={() => setKeys(prev => ({ ...prev, shift: false }))}
-                  onPointerCancel={() => setKeys(prev => ({ ...prev, shift: false }))}
-                >
-                  Sprint
-                </button>
-                <button
-                  className="w-14 h-14 rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur text-sm"
-                  onClick={() => { const id = overlapRef.current; if (id) setActiveZone(id); }}
-                >
-                  Open
-                </button>
-              </div>
-            </>
-          )}
         </div>
       </div>
 
@@ -1373,6 +1299,22 @@ export default function PortfolioGame() {
                           })}
                         </ul>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {zoneData.id === "loafing" && (
+                  <div className="mt-6 space-y-4">
+                    <p className="opacity-90">
+                      Welcome to the Loafing zone — a cozy corner to relax. Think of this as a lounge area of the portfolio.
+                    </p>
+                    <ul className="list-disc list-inside opacity-90">
+                      <li>Take a breather and explore at your own pace.</li>
+                      <li>Small notes or easter eggs can live here.</li>
+                      <li>Future idea: random quotes, photos, or ambient loops.</li>
+                    </ul>
+                    <div className="rounded-xl ring-1 ring-white/10 p-4 bg-white/5">
+                      <div className="text-sm opacity-80">Nothing to do? That’s the point. Just loaf 🥖</div>
                     </div>
                   </div>
                 )}
