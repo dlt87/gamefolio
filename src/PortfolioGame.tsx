@@ -11,7 +11,7 @@ const PADDING = 48; // min breathing room around the window
 const NAV_H = 56;        // height of your fixed header (px)
 const FOOTER_H = 28;     // bottom breathing room
 const EXTRA_GAP = 12;    // extra safety gap
-const MAX_VIEW = { width: 960, height: 540 }; // <= make the game box smaller (16:9)
+const MAX_VIEW = { width: 1280, height: 720 }; // <= make the game box smaller (16:9)
 const MINIMAP_MIN_WIDTH = 640; // hide minimap on narrow/mobile viewports
 
 // Tiles
@@ -246,7 +246,6 @@ function intersects(a: { x: number; y: number; w: number; h: number }, b: { x: n
 }
 
 // === Helpers & refs ===
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // Tile helpers
 const isSolid = (tx: number, ty: number) =>
@@ -338,6 +337,18 @@ export default function PortfolioGame() {
   // Touch joystick state
   const touchRef = useRef<{ id: number | null, startX: number, startY: number, dx: number, dy: number }>({ id: null, startX: 0, startY: 0, dx: 0, dy: 0 });
   const [stamina, setStamina] = useState(1); // 0..1
+
+  // Touch UI (joystick/buttons) visibility
+  const isTouchDevice = () => {
+    if (typeof window === 'undefined') return false;
+    return ('ontouchstart' in window) || (navigator as any).maxTouchPoints > 0;
+  };
+  const [showTouchUI, setShowTouchUI] = useState(() => (typeof window !== 'undefined') && (isTouchDevice() || window.innerWidth < 900));
+  useEffect(() => {
+    const onResize = () => setShowTouchUI(isTouchDevice() || window.innerWidth < 900);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Viewport state
   const [viewport, setViewport] = useState(
@@ -537,46 +548,12 @@ export default function PortfolioGame() {
       next.x = Math.max(0, Math.min(WORLD.width - next.w, next.x));
       next.y = Math.max(0, Math.min(WORLD.height - next.h, next.y));
 
-      // const vW = viewport.width / camera.zoom;
-      // const vH = viewport.height / camera.zoom;
-
-      // Camera target = keep player slightly off-center (soft bounds) + smooth lerp
-      const marginX = viewport.width * 0.3;
-      const marginY = viewport.height * 0.3;
-      const playerCenterX = next.x + next.w / 2;
-      const playerCenterY = next.y + next.h / 2;
-
-      // Base desired position (following player)
-      let desiredX = camera.x;
-      let desiredY = camera.y;
-
-      if (playerCenterX - camera.x < marginX) desiredX = Math.max(0, playerCenterX - marginX);
-      if (playerCenterX - camera.x > viewport.width - marginX)
-        desiredX = Math.min(WORLD.width - viewport.width, playerCenterX - (viewport.width - marginX));
-      if (playerCenterY - camera.y < marginY) desiredY = Math.max(0, playerCenterY - marginY);
-      if (playerCenterY - camera.y > viewport.height - marginY)
-        desiredY = Math.min(WORLD.height - viewport.height, playerCenterY - (viewport.height - marginY));
-
-      // If in a zone, smoothly move camera to focus on zone
-      const activeZoneObj = ZONES.find(z => z.id === activeZone);
-      if (activeZoneObj) {
-        const zoneCenter = {
-          x: activeZoneObj.rect.x + activeZoneObj.rect.w / 2,
-          y: activeZoneObj.rect.y + activeZoneObj.rect.h / 2
-        };
-
-        // Center the zone with some offset
-        desiredX = Math.max(0, Math.min(WORLD.width - viewport.width,
-          zoneCenter.x - viewport.width / 2));
-        desiredY = Math.max(0, Math.min(WORLD.height - viewport.height,
-          zoneCenter.y - viewport.height / 2));
-      }
-
-      // Smoothly approach desired position (adjust these values to change transition speed)
+      // Fit entire world into current viewport: compute uniform scale and disable panning
+      const fitScale = Math.min(viewport.width / WORLD.width, viewport.height / WORLD.height);
       const cam = {
-        x: lerp(camera.x, desiredX, activeZone ? 0.05 : 0.12), // Slower transition when entering zones
-        y: lerp(camera.y, desiredY, activeZone ? 0.05 : 0.12),
-        zoom: lerp(camera.zoom, activeZone ? 0.9 : 0.75, 0.08) // Subtle zoom effect
+        x: 0,
+        y: 0,
+        zoom: fitScale,
       };
 
       // Save lightweight state
@@ -601,21 +578,21 @@ export default function PortfolioGame() {
         ctx.fillStyle = "#0B1220";
         ctx.fillRect(0, 0, viewport.width, viewport.height);
 
-        ctx.save();
-        ctx.scale(camera.zoom, camera.zoom);   // zoom first
-        ctx.translate(-cam.x, -cam.y);         // then move the camera
+  ctx.save();
+  // Center the world with letterboxing, then scale to fit
+  const scale = cam.zoom;
+  const offX = (viewport.width - WORLD.width * scale) / 2;
+  const offY = (viewport.height - WORLD.height * scale) / 2;
+  ctx.translate(offX, offY);
+  ctx.scale(scale, scale);
 
-        // Compute visible tile range from camera & viewport (ZOOM-AWARE + PADDING)
-        const vW = viewport.width / camera.zoom;  // world-space view width
-        const vH = viewport.height / camera.zoom;  // world-space view height
-        const PAD = 2 * TILE;                      // overdraw to prevent gaps
+  // Draw entire world; culling not required when fully in view
+  const tx0 = 0;
+  const ty0 = 0;
+  const tx1 = COLS - 1;
+  const ty1 = ROWS - 1;
 
-        const tx0 = Math.max(0, Math.floor((camera.x - PAD) / TILE));
-        const ty0 = Math.max(0, Math.floor((camera.y - PAD) / TILE));
-        const tx1 = Math.min(COLS - 1, Math.floor((camera.x + vW + PAD) / TILE));
-        const ty1 = Math.min(ROWS - 1, Math.floor((camera.y + vH + PAD) / TILE));
-
-        ctx.lineWidth = 1 / camera.zoom;
+  ctx.lineWidth = 1 / scale;
 
         // Grid lines (optional, visible window only)
         ctx.strokeStyle = "rgba(255,255,255,0.05)";
@@ -653,12 +630,8 @@ export default function PortfolioGame() {
           const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
           const targetCount = prefersReduced ? 12 : 24;
 
-          // Spawn within music zone bounds when visible in viewport region
-          const visibleX0 = camera.x;
-          const visibleY0 = camera.y;
-          const visibleX1 = camera.x + vW;
-          const visibleY1 = camera.y + vH;
-          const musicVisible = !(music.rect.x + music.rect.w < visibleX0 || music.rect.x > visibleX1 || music.rect.y + music.rect.h < visibleY0 || music.rect.y > visibleY1);
+          // Whole world is always visible, so music zone is visible as well
+          const musicVisible = true;
 
           if (musicVisible && firefliesRef.current.length < targetCount) {
             // Throttle spawn rate
@@ -833,8 +806,8 @@ export default function PortfolioGame() {
 
         // ctx.restore();
 
-        // Joystick UI (screen space)
-        if (touchRef.current.id !== null) {
+        // Joystick UI (screen space) - only draw from canvas when no overlay touch UI
+        if (touchRef.current.id !== null && !showTouchUI) {
           const r = 34;
           const cx = touchRef.current.startX;
           const cy = touchRef.current.startY;
@@ -1014,6 +987,69 @@ export default function PortfolioGame() {
               }
             }}
           />
+          {/* Touch overlay controls (mobile) */}
+          {showTouchUI && (
+            <>
+              {/* Joystick (bottom-left) */}
+              <div
+                role="slider"
+                aria-label="Virtual joystick"
+                className="absolute left-4 bottom-4 w-28 h-28 rounded-full bg-white/5 backdrop-blur ring-1 ring-white/10 select-none touch-none"
+                onPointerDown={(e) => {
+                  const cvs = canvasRef.current; if (!cvs) return;
+                  const joy = e.currentTarget as HTMLDivElement;
+                  const joyRect = joy.getBoundingClientRect();
+                  const centerClientX = joyRect.left + joyRect.width / 2;
+                  const centerClientY = joyRect.top + joyRect.height / 2;
+                  const canvasRect = cvs.getBoundingClientRect();
+                  const startX = centerClientX - canvasRect.left;
+                  const startY = centerClientY - canvasRect.top;
+                  (joy as Element).setPointerCapture(e.pointerId);
+                  touchRef.current = { id: e.pointerId, startX, startY, dx: 0, dy: 0 };
+                }}
+                onPointerMove={(e) => {
+                  if (touchRef.current.id !== e.pointerId) return;
+                  const joy = e.currentTarget as HTMLDivElement;
+                  const joyRect = joy.getBoundingClientRect();
+                  const cx = joyRect.left + joyRect.width / 2;
+                  const cy = joyRect.top + joyRect.height / 2;
+                  const R = Math.min(joyRect.width, joyRect.height) * 0.45;
+                  let dx = e.clientX - cx;
+                  let dy = e.clientY - cy;
+                  const m = Math.hypot(dx, dy) || 1;
+                  if (m > R) { dx = (dx / m) * R; dy = (dy / m) * R; }
+                  touchRef.current.dx = dx;
+                  touchRef.current.dy = dy;
+                }}
+                onPointerUp={(e) => {
+                  if (touchRef.current.id === e.pointerId) {
+                    touchRef.current = { id: null, startX: 0, startY: 0, dx: 0, dy: 0 };
+                  }
+                }}
+              >
+                {/* Knob visual follows dx/dy via CSS transform using inline style would require state; keep base pad only; the canvas HUD shows knob when active */}
+                <div className="absolute inset-[22%] rounded-full bg-white/10" />
+              </div>
+
+              {/* Action buttons (bottom-right) */}
+              <div className="absolute right-4 bottom-4 flex gap-3">
+                <button
+                  className="w-14 h-14 rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur text-sm"
+                  onPointerDown={() => setKeys(prev => ({ ...prev, shift: true }))}
+                  onPointerUp={() => setKeys(prev => ({ ...prev, shift: false }))}
+                  onPointerCancel={() => setKeys(prev => ({ ...prev, shift: false }))}
+                >
+                  Sprint
+                </button>
+                <button
+                  className="w-14 h-14 rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur text-sm"
+                  onClick={() => { const id = overlapRef.current; if (id) setActiveZone(id); }}
+                >
+                  Open
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
