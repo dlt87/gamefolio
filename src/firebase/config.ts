@@ -7,12 +7,12 @@ import { getStorage } from 'firebase/storage';
 // 1. Replace these values directly with your Firebase config, OR
 // 2. Create a .env file (copy from .env.example) and use environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "YOUR_APP_ID"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBBss-NIYBAfTiRlEpY6f2B-6nHE7Z6fo8",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "gamefolio-29d27.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "gamefolio-29d27",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "gamefolio-29d27.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "651668185617",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:651668185617:web:1058c305c4d255a1e3c7b0"
 };
 
 // Initialize Firebase
