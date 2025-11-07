@@ -204,14 +204,29 @@ const BulletinBoard = () => {
 
     fetchPosts();
 
-    // Subscribe to real-time changes
+    // Subscribe to real-time changes with proper event handling
     const channel = supabase
       .channel("posts-changes")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "posts" },
-        () => {
-          fetchPosts(); // Refetch on any change
+        { event: "INSERT", schema: "public", table: "posts" },
+        (payload) => {
+          // Add new post immediately to the list
+          const newPost = {
+            id: payload.new.id,
+            imageUrl: payload.new.image_url,
+            message: payload.new.caption,
+            timestamp: new Date(payload.new.created_at).getTime()
+          };
+          setPosts(prev => [newPost, ...prev]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "posts" },
+        (payload) => {
+          // Remove deleted post immediately
+          setPosts(prev => prev.filter(post => post.id !== payload.old.id));
         }
       )
       .subscribe();
@@ -440,35 +455,45 @@ const BulletinBoard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {posts.map((post) => (
-              <div
-                key={post.id}
-                className="relative group rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10"
-              >
-                <img
-                  src={post.imageUrl}
-                  alt="Bulletin post"
-                  className="w-full aspect-square object-cover"
-                />
-                {post.message && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/70 backdrop-blur-sm p-2">
-                    <p className="text-xs line-clamp-2">{post.message}</p>
-                  </div>
-                )}
-                <button
-                  onClick={() => deletePost(post.id)}
-                  className="absolute top-2 right-2 rounded-full bg-red-500/80 hover:bg-red-500 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="Delete post"
+            {posts.map((post) => {
+              const date = new Date(post.timestamp);
+              const dateStr = date.toLocaleDateString();
+              const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              
+              return (
+                <div
+                  key={post.id}
+                  className="relative group rounded-lg overflow-hidden bg-white/5 ring-1 ring-white/10 flex flex-col"
                 >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                <div className="absolute bottom-2 left-2 text-xs opacity-60">
-                  {new Date(post.timestamp).toLocaleDateString()}
+                  <img
+                    src={post.imageUrl}
+                    alt="Bulletin post"
+                    className="w-full aspect-square object-cover"
+                  />
+                  
+                  {/* Caption and timestamp container */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent pt-8 pb-2 px-2">
+                    {post.message && (
+                      <p className="text-xs line-clamp-2 mb-1">{post.message}</p>
+                    )}
+                    <div className="text-xs opacity-70">
+                      {dateStr} • {timeStr}
+                    </div>
+                  </div>
+
+                  {/* Delete button */}
+                  <button
+                    onClick={() => deletePost(post.id)}
+                    className="absolute top-2 right-2 rounded-full bg-red-500/80 hover:bg-red-500 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Delete post"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
