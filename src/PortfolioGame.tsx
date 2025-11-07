@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, memo } from "react";
 import { useAudio } from "./audio/useAudio";
-import { db, storage } from "./firebase/config";
-import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, limit } from "firebase/firestore";
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { supabase } from "./supabaseClient";
 
 // --- Tweakable gameplay constants ---
 const WORLD = { width: 2000, height: 1200 };
@@ -181,26 +179,46 @@ const BulletinBoard = () => {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Subscribe to real-time posts from Firestore
+  // Subscribe to real-time posts from Supabase
   useEffect(() => {
-    const postsCollection = collection(db, "bulletin-posts");
-    const q = query(postsCollection, orderBy("timestamp", "desc"), limit(50));
-    
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const postsData: BulletinPost[] = [];
-        snapshot.forEach((doc) => {
-          postsData.push({ id: doc.id, ...doc.data() } as BulletinPost);
-        });
-        setPosts(postsData);
-      },
-      (err) => {
-        console.error("Error fetching posts:", err);
-        setError("Failed to load posts from server");
-      }
-    );
+    // Initial fetch
+    const fetchPosts = async () => {
+      const { data, error: fetchError } = await supabase
+        .from("posts")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-    return () => unsubscribe();
+      if (fetchError) {
+        console.error("Error fetching posts:", fetchError);
+        setError("Failed to load posts from server");
+      } else {
+        setPosts(data.map(post => ({
+          id: post.id,
+          imageUrl: post.image_url,
+          message: post.caption,
+          timestamp: new Date(post.created_at).getTime()
+        })));
+      }
+    };
+
+    fetchPosts();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel("posts-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "posts" },
+        () => {
+          fetchPosts(); // Refetch on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Attach stream to video element when camera turns on
@@ -264,19 +282,37 @@ const BulletinBoard = () => {
     setError(null);
 
     try {
-      // Upload image to Firebase Storage
-      const timestamp = Date.now();
-      const imageRef = ref(storage, `bulletin-posts/${timestamp}.jpg`);
-      
-      await uploadString(imageRef, capturedImage, "data_url");
-      const imageUrl = await getDownloadURL(imageRef);
+      // Convert base64 to blob
+      const base64Response = await fetch(capturedImage);
+      const blob = await base64Response.blob();
 
-      // Save post to Firestore
-      await addDoc(collection(db, "bulletin-posts"), {
-        imageUrl,
-        message: message.trim() || null,
-        timestamp,
-      });
+      // Upload image to Supabase Storage
+      const timestamp = Date.now();
+      const fileName = `${timestamp}.jpg`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("bulletin-images")
+        .upload(fileName, blob, {
+          contentType: "image/jpeg",
+          cacheControl: "3600",
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from("bulletin-images")
+        .getPublicUrl(uploadData.path);
+
+      // Save post to Supabase database
+      const { error: insertError } = await supabase
+        .from("posts")
+        .insert({
+          image_url: publicUrl,
+          caption: message.trim() || null,
+        });
+
+      if (insertError) throw insertError;
 
       // Reset form
       setCapturedImage(null);
@@ -292,8 +328,13 @@ const BulletinBoard = () => {
 
   const deletePost = async (id: string) => {
     try {
-      // Delete from Firestore
-      await deleteDoc(doc(db, "bulletin-posts", id));
+      // Delete from Supabase
+      const { error: deleteError } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", id);
+
+      if (deleteError) throw deleteError;
       
       // Note: We're not deleting from Storage to keep it simple
       // In production, you'd want to delete the image file too
