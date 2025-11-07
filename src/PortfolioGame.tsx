@@ -199,6 +199,16 @@ const BulletinBoard = () => {
     }
   }, [posts]);
 
+  // Attach stream to video element when camera turns on
+  useEffect(() => {
+    if (stream && videoRef.current && isCameraOn) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => {
+        console.warn("Video play error:", err);
+      });
+    }
+  }, [stream, isCameraOn]);
+
   const startCamera = async () => {
     try {
       setError(null);
@@ -208,9 +218,6 @@ const BulletinBoard = () => {
       });
       setStream(mediaStream);
       setIsCameraOn(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
     } catch (err) {
       setError("Camera access denied or not available");
       console.error("Camera error:", err);
@@ -269,7 +276,7 @@ const BulletinBoard = () => {
   return (
     <div className="mt-6 space-y-6">
       <p className="opacity-90">
-        Take a selfie and post it on the bulletin board! Your photo will be saved locally in your browser.
+        Your photo will be saved locally in your browser.
       </p>
 
       {/* Camera Interface */}
