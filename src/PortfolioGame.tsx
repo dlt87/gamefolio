@@ -211,6 +211,7 @@ const BulletinBoard = () => {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "posts" },
         (payload) => {
+          console.log("New post received:", payload);
           // Add new post immediately to the list
           const newPost = {
             id: payload.new.id,
@@ -225,11 +226,14 @@ const BulletinBoard = () => {
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "posts" },
         (payload) => {
+          console.log("Post deleted:", payload);
           // Remove deleted post immediately
           setPosts(prev => prev.filter(post => post.id !== payload.old.id));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Realtime subscription status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -766,6 +770,12 @@ export default function PortfolioGame() {
   // Keyboard
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      // Ignore keyboard events when typing in input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
       const k = e.key.toLowerCase();
       if (["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright", "shift"].includes(k)) {
         e.preventDefault();
@@ -794,7 +804,14 @@ export default function PortfolioGame() {
         setCamera((c) => ({ ...c, zoom: 0.75 })); // reset
       }
     };
-    const up = (e: KeyboardEvent) => setKeys(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
+    const up = (e: KeyboardEvent) => {
+      // Ignore keyboard events when typing in input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+      setKeys(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
